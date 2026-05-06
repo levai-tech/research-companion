@@ -1,0 +1,27 @@
+{
+  "productName": "Research Companion",
+  "version": "0.1.0",
+  "identifier": "tech.levai.research-companion",
+  "build": {
+    "frontendDist": "../frontend"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Research Companion",
+        "width": 1280,
+        "height": 800
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "resources": {
+      "../backend": "backend"
+    }
+  }
+}
