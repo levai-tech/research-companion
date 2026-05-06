@@ -5,6 +5,7 @@ import { useAppStore } from "../store";
 import { Button } from "@/components/ui/button";
 
 const ROLES: { key: string; label: string }[] = [
+  { key: "project_advisor", label: "Project Advisor" },
   { key: "angle_explorer", label: "Angle Explorer" },
   { key: "research_agent", label: "Research Agent" },
   { key: "literature_review", label: "Literature Review Synthesizer" },
@@ -13,6 +14,7 @@ const ROLES: { key: string; label: string }[] = [
 ];
 
 const FREE_MODELS: Record<string, string> = {
+  project_advisor: "GPT OSS 20B (free)",
   angle_explorer: "Hermes 3 405B (free)",
   research_agent: "Llama 3.3 70B (free)",
   literature_review: "Hermes 3 405B (free)",
@@ -21,6 +23,7 @@ const FREE_MODELS: Record<string, string> = {
 };
 
 const PAID_MODELS: Record<string, string> = {
+  project_advisor: "Claude Sonnet 4.6",
   angle_explorer: "Claude Opus 4.7",
   research_agent: "Gemini 2.5 Flash",
   literature_review: "Gemini 2.5 Flash",

@@ -17,7 +17,11 @@ A single-user desktop app (Tauri + Python FastAPI + React) that acts as an AI re
 | **Catalogue** | The hardcoded table of free/paid model IDs per Agent Role, embedded in the Model Router. | "model list", "registry" |
 | **Settings** | Non-sensitive configuration (tier per role, search provider, Ollama endpoint) stored in a JSON file. | "config", "preferences" |
 | **Key Store** | The OS credential store (Windows Credential Manager / macOS Keychain / libsecret) accessed via Python `keyring`. | "secrets store", "vault" |
-| **Angle Explorer** | Agent Role that takes a topic + genre and returns a set of possible angles for the user to choose from. | |
+| **Setup Chat** | The AI-driven conversational flow that establishes Project parameters (topic, theme, angle, document type) when creating a new Project. Uses the Project Advisor agent role. | "onboarding", "wizard" |
+| **Project Advisor** | Agent Role that runs the Setup Chat — grills the user to establish Project parameters, then suggests Layouts. | "setup agent", "onboarding agent" |
+| **Document Type** | The kind of writing the user is producing (Book, Article, Essay, Investigative Journalism), established during Setup Chat — never selected via a dropdown. | "genre" |
+| **Layout** | A structural template suggested by the Project Advisor at the end of Setup Chat. Defines sections, their order, and purpose. The user picks one Layout to anchor the Project. | "template", "structure", "outline skeleton" |
+| **Angle Explorer** | Agent Role that takes a topic + Document Type and returns a set of possible angles for the user to choose from. | |
 | **Outline Generator** | Agent Role that converts a chosen angle into a hierarchical document outline. | |
 | **Research Agent** | Agent Role that performs web search + RAG to produce source-backed summary cards. | |
 | **Literature Review Synthesizer** | Agent Role that sweeps sources, curates, and synthesises a literature review section. | |
@@ -33,6 +37,7 @@ Managed by the Model Router. Users select Tier per role; they never enter raw mo
 
 | Agent Role | Free model (default) | Paid model |
 |-----------|---------------------|------------|
+| Project Advisor | `nousresearch/hermes-3-llama-3.1-405b:free` | `anthropic/claude-sonnet-4.6` |
 | Angle Explorer | `nousresearch/hermes-3-llama-3.1-405b:free` | `anthropic/claude-opus-4.7` |
 | Research Agent | `meta-llama/llama-3.3-70b-instruct:free` | `google/gemini-2.5-flash` |
 | Literature Review Synthesizer | `nousresearch/hermes-3-llama-3.1-405b:free` | `google/gemini-2.5-flash` |
@@ -46,7 +51,8 @@ Managed by the Model Router. Users select Tier per role; they never enter raw mo
 ├── settings.json          # Settings (non-sensitive)
 └── projects/
     └── <project-id>/
-        └── db.sqlite      # Per-project SQLite + sqlite-vec (Documents, Chunks, Embeddings)
+        ├── db.sqlite      # Per-project SQLite + sqlite-vec (Documents, Chunks, Embeddings)
+        └── sources/       # Raw source material files uploaded by the user
 
 OS Credential Store        # Key Store: OpenRouter API key (and optional provider keys)
 ```

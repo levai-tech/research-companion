@@ -1,8 +1,7 @@
 import { useState } from "react";
 import { Settings } from "lucide-react";
-import HealthCheck from "./components/HealthCheck";
+import HomeScreen from "./components/HomeScreen";
 import SettingsPage from "./components/SettingsPage";
-import { Button } from "@/components/ui/button";
 import { useBackendPort } from "./hooks/useBackendPort";
 
 export default function App() {
@@ -26,10 +25,7 @@ export default function App() {
         {showSettings ? (
           <SettingsPage onClose={() => setShowSettings(false)} />
         ) : (
-          <div className="p-8 space-y-4">
-            <HealthCheck />
-            <Button variant="outline">Open Project</Button>
-          </div>
+          <HomeScreen />
         )}
       </main>
     </div>

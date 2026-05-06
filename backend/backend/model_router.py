@@ -1,4 +1,8 @@
 _CATALOGUE: dict[str, dict[str, str]] = {
+    "project_advisor": {
+        "free": "openai/gpt-oss-20b:free",
+        "paid": "anthropic/claude-sonnet-4.6",
+    },
     "angle_explorer": {
         "free": "nousresearch/hermes-3-llama-3.1-405b:free",
         "paid": "anthropic/claude-opus-4.7",

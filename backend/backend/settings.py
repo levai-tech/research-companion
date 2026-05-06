@@ -9,6 +9,7 @@ _KEYCHAIN_SERVICE = "research-companion"
 
 _DEFAULTS: dict = {
     "roles": {
+        "project_advisor": {"tier": "free"},
         "angle_explorer": {"tier": "free"},
         "research_agent": {"tier": "free"},
         "literature_review": {"tier": "free"},

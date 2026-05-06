@@ -2,11 +2,20 @@ import { useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useAppStore } from "../store";
 
+const DEV_PORT = import.meta.env.VITE_BACKEND_PORT
+  ? Number(import.meta.env.VITE_BACKEND_PORT)
+  : null;
+
 export function useBackendPort(): number | null {
   const backendPort = useAppStore((s) => s.backendPort);
   const setBackendPort = useAppStore((s) => s.setBackendPort);
 
   useEffect(() => {
+    if (DEV_PORT) {
+      setBackendPort(DEV_PORT);
+      return;
+    }
+
     let cancelled = false;
 
     function poll() {
