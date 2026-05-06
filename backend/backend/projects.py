@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import json
 import sqlite3
 import uuid
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, field
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -78,6 +79,80 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 _SELECT_ONE = """
 SELECT id, title, topic, theme, angle, document_type, layout_id, last_modified
 FROM project_meta LIMIT 1
+"""
+
+
+@dataclass
+class OutlineStructure:
+    id: str
+    project_id: str
+    structure_id: str
+    title: str
+    rationale: str
+    tradeoff: str
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+
+@dataclass
+class OutlineSection:
+    id: str
+    project_id: str
+    parent_id: str | None
+    title: str
+    description: str
+    position: int
+    subsections: list["OutlineSection"] = field(default_factory=list)
+
+    def to_dict(self) -> dict:
+        d = asdict(self)
+        d["subsections"] = [s.to_dict() for s in self.subsections]
+        return d
+
+
+@dataclass
+class Outline:
+    structure: OutlineStructure | None
+    sections: list[OutlineSection]
+
+    def to_dict(self) -> dict:
+        return {
+            "structure": self.structure.to_dict() if self.structure else None,
+            "sections": [s.to_dict() for s in self.sections],
+        }
+
+
+_CREATE_OUTLINE_STRUCTURE_TABLE = """
+CREATE TABLE IF NOT EXISTS outline_structure (
+    id           TEXT PRIMARY KEY,
+    project_id   TEXT NOT NULL,
+    structure_id TEXT NOT NULL,
+    title        TEXT NOT NULL,
+    rationale    TEXT NOT NULL,
+    tradeoff     TEXT NOT NULL
+)
+"""
+
+_INSERT_OUTLINE_STRUCTURE = """
+INSERT INTO outline_structure (id, project_id, structure_id, title, rationale, tradeoff)
+VALUES (?, ?, ?, ?, ?, ?)
+"""
+
+_CREATE_OUTLINE_SECTIONS_TABLE = """
+CREATE TABLE IF NOT EXISTS outline_sections (
+    id          TEXT PRIMARY KEY,
+    project_id  TEXT NOT NULL,
+    parent_id   TEXT,
+    title       TEXT NOT NULL,
+    description TEXT NOT NULL,
+    position    INTEGER NOT NULL
+)
+"""
+
+_INSERT_OUTLINE_SECTION = """
+INSERT INTO outline_sections (id, project_id, parent_id, title, description, position)
+VALUES (?, ?, ?, ?, ?, ?)
 """
 
 
@@ -167,3 +242,153 @@ class ProjectService:
         rows = con.execute(_SELECT_ANGLES).fetchall()
         con.close()
         return [Angle(*row) for row in rows]
+
+    def save_outline(
+        self,
+        project_id: str,
+        structure: dict,
+        sections: list[dict],
+    ) -> "Outline":
+        con = self._db(project_id)
+        con.execute(_CREATE_OUTLINE_STRUCTURE_TABLE)
+        con.execute(_CREATE_OUTLINE_SECTIONS_TABLE)
+        con.execute("DELETE FROM outline_structure WHERE project_id = ?", (project_id,))
+        con.execute("DELETE FROM outline_sections WHERE project_id = ?", (project_id,))
+
+        structure_id = str(uuid.uuid4())
+        con.execute(
+            _INSERT_OUTLINE_STRUCTURE,
+            (structure_id, project_id, structure["id"], structure["title"], structure["rationale"], structure["tradeoff"]),
+        )
+
+        saved_sections: list[OutlineSection] = []
+        for pos, section in enumerate(sections):
+            section_id = str(uuid.uuid4())
+            con.execute(
+                _INSERT_OUTLINE_SECTION,
+                (section_id, project_id, None, section["title"], section.get("description", ""), pos),
+            )
+            saved_sections.append(OutlineSection(
+                id=section_id,
+                project_id=project_id,
+                parent_id=None,
+                title=section["title"],
+                description=section.get("description", ""),
+                position=pos,
+                subsections=[],
+            ))
+            for sub_pos, sub in enumerate(section.get("subsections", [])):
+                sub_id = str(uuid.uuid4())
+                con.execute(
+                    _INSERT_OUTLINE_SECTION,
+                    (sub_id, project_id, section_id, sub["title"], sub.get("description", ""), sub_pos),
+                )
+                saved_sections[-1].subsections.append(OutlineSection(
+                    id=sub_id,
+                    project_id=project_id,
+                    parent_id=section_id,
+                    title=sub["title"],
+                    description=sub.get("description", ""),
+                    position=sub_pos,
+                    subsections=[],
+                ))
+
+        con.commit()
+        con.close()
+        return Outline(
+            structure=OutlineStructure(
+                id=structure_id,
+                project_id=project_id,
+                structure_id=structure["id"],
+                title=structure["title"],
+                rationale=structure["rationale"],
+                tradeoff=structure["tradeoff"],
+            ),
+            sections=saved_sections,
+        )
+
+    def get_outline(self, project_id: str) -> "Outline":
+        if not (self._projects_dir / project_id / "db.sqlite").exists():
+            return Outline(structure=None, sections=[])
+        con = self._db(project_id)
+        con.execute(_CREATE_OUTLINE_STRUCTURE_TABLE)
+        con.execute(_CREATE_OUTLINE_SECTIONS_TABLE)
+
+        row = con.execute(
+            "SELECT id, project_id, structure_id, title, rationale, tradeoff FROM outline_structure WHERE project_id = ? LIMIT 1",
+            (project_id,),
+        ).fetchone()
+
+        if row is None:
+            con.close()
+            return Outline(structure=None, sections=[])
+
+        structure = OutlineStructure(*row)
+
+        section_rows = con.execute(
+            "SELECT id, project_id, parent_id, title, description, position FROM outline_sections WHERE project_id = ? ORDER BY parent_id IS NOT NULL, position",
+            (project_id,),
+        ).fetchall()
+        con.close()
+
+        top_level: list[OutlineSection] = []
+        by_id: dict[str, OutlineSection] = {}
+        for r in section_rows:
+            sec = OutlineSection(id=r[0], project_id=r[1], parent_id=r[2], title=r[3], description=r[4], position=r[5], subsections=[])
+            by_id[sec.id] = sec
+            if sec.parent_id is None:
+                top_level.append(sec)
+            else:
+                parent = by_id.get(sec.parent_id)
+                if parent:
+                    parent.subsections.append(sec)
+
+        return Outline(structure=structure, sections=top_level)
+
+    def get_document(self, project_id: str) -> dict:
+        project = self.get(project_id)
+        con = self._db(project_id)
+        con.execute(_CREATE_DOCUMENTS_TABLE)
+        row = con.execute(_SELECT_DOCUMENT, (project_id,)).fetchone()
+        con.close()
+        if row is None:
+            return _default_doc(project.title if project else "")
+        return json.loads(row[0])
+
+    def save_document(self, project_id: str, content: dict) -> None:
+        con = self._db(project_id)
+        con.execute(_CREATE_DOCUMENTS_TABLE)
+        con.execute(
+            _UPSERT_DOCUMENT,
+            (str(uuid.uuid4()), project_id, json.dumps(content), datetime.now(timezone.utc).isoformat()),
+        )
+        con.commit()
+        con.close()
+
+
+_CREATE_DOCUMENTS_TABLE = """
+CREATE TABLE IF NOT EXISTS documents (
+    id          TEXT PRIMARY KEY,
+    project_id  TEXT NOT NULL UNIQUE,
+    content     TEXT NOT NULL,
+    updated_at  TEXT NOT NULL
+)
+"""
+
+_UPSERT_DOCUMENT = """
+INSERT INTO documents (id, project_id, content, updated_at)
+VALUES (?, ?, ?, ?)
+ON CONFLICT(project_id) DO UPDATE SET content = excluded.content, updated_at = excluded.updated_at
+"""
+
+_SELECT_DOCUMENT = "SELECT content FROM documents WHERE project_id = ?"
+
+
+def _default_doc(title: str) -> dict:
+    return {
+        "type": "doc",
+        "content": [
+            {"type": "heading", "attrs": {"level": 1}, "content": [{"type": "text", "text": title}]},
+            {"type": "paragraph"},
+        ],
+    }

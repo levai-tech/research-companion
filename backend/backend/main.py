@@ -155,6 +155,19 @@ def create_app(settings_path: Path | None = None, projects_dir: Path | None = No
             raise HTTPException(status_code=404, detail="Project not found")
         return project_service.get_outline(project_id).to_dict()
 
+    @app.get("/projects/{project_id}/document")
+    async def get_document(project_id: str):
+        if project_service.get(project_id) is None:
+            raise HTTPException(status_code=404, detail="Project not found")
+        return project_service.get_document(project_id)
+
+    @app.put("/projects/{project_id}/document", status_code=204)
+    async def put_document(project_id: str, body: dict):
+        if project_service.get(project_id) is None:
+            raise HTTPException(status_code=404, detail="Project not found")
+        project_service.save_document(project_id, body)
+        return Response(status_code=204)
+
     @app.post("/interview")
     async def post_interview(body: dict):
         messages = body.get("messages", [])
