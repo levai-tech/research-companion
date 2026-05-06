@@ -2,16 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { useAppStore } from "../store";
 import type { Project } from "../hooks/useProjects";
 
-interface Layout {
-  id: string;
-  name: string;
-  description: string;
-}
-
 interface ProjectMetadata {
   topic: string;
-  theme: string;
-  angle: string;
   document_type: string;
 }
 
@@ -28,8 +20,8 @@ export default function Interview({ onProjectCreated }: InterviewProps) {
   const port = useAppStore((s) => s.backendPort);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
-  const [layouts, setLayouts] = useState<Layout[] | null>(null);
-  const [metadata, setMetadata] = useState<ProjectMetadata | null>(null);
+  const [isReady, setIsReady] = useState(false);
+  const [readyMetadata, setReadyMetadata] = useState<ProjectMetadata | null>(null);
   const [isSending, setIsSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const initialized = useRef(false);
@@ -54,14 +46,14 @@ export default function Interview({ onProjectCreated }: InterviewProps) {
         return;
       }
       const data = await response.json();
-      if (data.phase === "suggest") {
-        setLayouts(data.layouts);
-        setMetadata(data.project_metadata);
-        setMessages((prev) => [...prev, { role: "assistant", content: data.message }]);
-      } else {
-        setMessages((prev) => [...prev, { role: "assistant", content: data.message }]);
+      setMessages((prev) => [...prev, { role: "assistant", content: data.message }]);
+      if (data.phase === "ready") {
+        setIsReady(true);
+        if (data.project_metadata) {
+          setReadyMetadata(data.project_metadata);
+        }
       }
-    } catch (e) {
+    } catch {
       setError("Could not reach the backend. Is it running?");
     } finally {
       setIsSending(false);
@@ -83,20 +75,31 @@ export default function Interview({ onProjectCreated }: InterviewProps) {
     await sendMessages(next);
   }
 
-  async function handleSelectLayout(layout: Layout) {
-    if (!metadata) return;
-    const response = await fetch(`http://127.0.0.1:${port}/projects`, {
+  async function handleDone() {
+    const topic = readyMetadata?.topic ?? messages.find((m) => m.role === "user")?.content ?? "Untitled";
+    const document_type = readyMetadata?.document_type ?? "article";
+
+    const projectRes = await fetch(`http://127.0.0.1:${port}/projects`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        title: metadata.topic,
-        ...metadata,
-        layout_id: layout.id,
-      }),
+      body: JSON.stringify({ title: topic, topic, document_type }),
     });
-    const project = await response.json();
+    if (!projectRes.ok) {
+      setError("Failed to create project.");
+      return;
+    }
+    const project = await projectRes.json();
+
+    await fetch(`http://127.0.0.1:${port}/projects/${project.id}/transcript`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ messages }),
+    });
+
     onProjectCreated(project);
   }
+
+  const hasStarted = messages.some((m) => m.role === "assistant");
 
   return (
     <div className="flex flex-col gap-4 p-6">
@@ -115,27 +118,16 @@ export default function Interview({ onProjectCreated }: InterviewProps) {
         ))}
       </div>
 
-      {layouts ? (
-        <div className="grid gap-3">
-          {layouts.map((layout) => (
-            <button
-              key={layout.id}
-              className="rounded border p-4 text-left"
-              onClick={() => handleSelectLayout(layout)}
-            >
-              <p className="font-semibold">{layout.name}</p>
-              <p className="text-sm">{layout.description}</p>
-            </button>
-          ))}
-        </div>
-      ) : (
-        <div className="flex gap-2">
+      <div className="flex gap-2">
+        {!isReady && (
           <input
             className="flex-1 rounded border px-3 py-2"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleSend()}
           />
+        )}
+        {!isReady && (
           <button
             className="rounded bg-primary px-4 py-2 text-primary-foreground"
             onClick={handleSend}
@@ -143,8 +135,17 @@ export default function Interview({ onProjectCreated }: InterviewProps) {
           >
             Send
           </button>
-        </div>
-      )}
+        )}
+        {hasStarted && (
+          <button
+            className="rounded border px-4 py-2"
+            onClick={handleDone}
+            disabled={isSending}
+          >
+            Done
+          </button>
+        )}
+      </div>
     </div>
   );
 }

@@ -149,6 +149,29 @@ def create_app(settings_path: Path | None = None, projects_dir: Path | None = No
         project_service.save_document(project_id, body)
         return Response(status_code=204)
 
+    @app.post("/projects/{project_id}/transcript", status_code=201)
+    async def post_transcript(project_id: str, body: dict):
+        if project_service.get(project_id) is None:
+            raise HTTPException(status_code=404, detail="Project not found")
+        messages = body.get("messages", [])
+        try:
+            summary = await interview.generate_summary(messages)
+        except httpx.HTTPStatusError as e:
+            raise _llm_error(e)
+        except RuntimeError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        transcript = project_service.save_transcript(project_id, messages, summary)
+        return transcript.to_dict()
+
+    @app.get("/projects/{project_id}/transcript")
+    async def get_transcript(project_id: str):
+        if project_service.get(project_id) is None:
+            raise HTTPException(status_code=404, detail="Project not found")
+        transcript = project_service.get_transcript(project_id)
+        if transcript is None:
+            raise HTTPException(status_code=404, detail="Transcript not found")
+        return transcript.to_dict()
+
     @app.post("/interview")
     async def post_interview(body: dict):
         messages = body.get("messages", [])
@@ -158,7 +181,7 @@ def create_app(settings_path: Path | None = None, projects_dir: Path | None = No
             raise _llm_error(e)
         except RuntimeError as e:
             raise HTTPException(status_code=400, detail=str(e))
-        if isinstance(result, dict) and result.get("phase") == "suggest":
+        if isinstance(result, dict) and result.get("phase") == "ready":
             return result
         return {"phase": "chat", "message": result}
 

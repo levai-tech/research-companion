@@ -28,32 +28,26 @@ async def test_interview_first_turn_returns_question(app):
     assert "layouts" not in body
 
 
-# ── Behavior 6: suggest phase returns layouts ─────────────────────────────────
+# ── Behavior 6: ready phase forwards project_metadata ────────────────────────
 
-async def test_interview_returns_layouts_when_llm_signals_suggest(app):
+async def test_interview_returns_ready_with_project_metadata(app):
     transport = httpx.ASGITransport(app=app)
 
-    suggest_response = {
-        "phase": "suggest",
-        "message": "Great — here are some layouts that fit your project.",
-        "layouts": [
-            {"id": "three-act", "name": "Three-Act Structure", "description": "Classic narrative arc with setup, confrontation, resolution."},
-            {"id": "inverted-pyramid", "name": "Inverted Pyramid", "description": "Lead with conclusions, drill down into detail."},
-        ],
+    ready_response = {
+        "phase": "ready",
+        "message": "I think I have enough — continue or click Done.",
         "project_metadata": {
-            "topic": "Quantum computing",
-            "theme": "Accessibility of complex tech",
-            "angle": "The human cost of ignoring quantum-resistant encryption",
-            "document_type": "book",
+            "topic": "Quantum computing and encryption",
+            "document_type": "long-form investigative article",
         },
     }
 
     with patch("backend.interview.call_llm", new_callable=AsyncMock) as mock_llm:
-        mock_llm.return_value = suggest_response
+        mock_llm.return_value = ready_response
 
         async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
             messages = [
-                {"role": "user", "content": "I want to write a book about quantum computing"},
+                {"role": "user", "content": "I want to write about quantum computing"},
                 {"role": "assistant", "content": "What angle interests you most?"},
                 {"role": "user", "content": "The security implications for everyday people"},
             ]
@@ -61,7 +55,36 @@ async def test_interview_returns_layouts_when_llm_signals_suggest(app):
 
     assert response.status_code == 200
     body = response.json()
-    assert body["phase"] == "suggest"
-    assert len(body["layouts"]) == 2
-    assert body["layouts"][0]["id"] == "three-act"
-    assert body["project_metadata"]["document_type"] == "book"
+    assert body["phase"] == "ready"
+    assert body["message"] == "I think I have enough — continue or click Done."
+    assert body["project_metadata"]["topic"] == "Quantum computing and encryption"
+    assert body["project_metadata"]["document_type"] == "long-form investigative article"
+    assert "layouts" not in body
+
+
+# ── Behavior 7: ready phase is forwarded to frontend ─────────────────────────
+
+async def test_interview_returns_ready_when_llm_signals_ready(app):
+    transport = httpx.ASGITransport(app=app)
+
+    ready_response = {
+        "phase": "ready",
+        "message": "I think I have enough — continue or click Done.",
+    }
+
+    with patch("backend.interview.call_llm", new_callable=AsyncMock) as mock_llm:
+        mock_llm.return_value = ready_response
+
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+            messages = [
+                {"role": "user", "content": "I want to write a book about climate change"},
+                {"role": "assistant", "content": "What angle interests you most?"},
+                {"role": "user", "content": "The political failure to act"},
+            ]
+            response = await client.post("/interview", json={"messages": messages})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["phase"] == "ready"
+    assert body["message"] == "I think I have enough — continue or click Done."
+    assert "layouts" not in body

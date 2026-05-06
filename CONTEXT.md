@@ -11,18 +11,19 @@ A single-user desktop app (Tauri + Python FastAPI + React) that acts as an AI re
 | **Chunk** | A fixed-size text segment produced by splitting a Document during indexing. The unit stored in the vector store. | "segment", "passage" |
 | **Embedding** | A dense vector representation of a Chunk, produced by the local embedding model and stored in sqlite-vec. | "vector", "encoding" |
 | **Vector Store** | The sqlite-vec extension inside the per-Project SQLite database that holds Chunks and their Embeddings. | "vector database", "index" |
-| **Agent Role** | A named function in the system (Angle Explorer, Research Agent, etc.) that maps to a configured LLM model. | "agent", "task" |
+| **Agent Role** | A named function in the system (Approach Explorer, Research Agent, etc.) that maps to a configured LLM model. | "agent", "task" |
 | **Model Router** | The backend module that maps an Agent Role + tier to an OpenRouter model ID and constructs the LLM client. | "model selector", "router" |
 | **Tier** | Either `"free"` or `"paid"` — the user's selection per Agent Role that determines which model is used. | "plan", "level" |
 | **Catalogue** | The hardcoded table of free/paid model IDs per Agent Role, embedded in the Model Router. | "model list", "registry" |
 | **Settings** | Non-sensitive configuration (tier per role, search provider, Ollama endpoint) stored in a JSON file. | "config", "preferences" |
 | **Key Store** | The OS credential store (Windows Credential Manager / macOS Keychain / libsecret) accessed via Python `keyring`. | "secrets store", "vault" |
-| **Setup Chat** | The AI-driven conversational flow that establishes Project parameters (topic, theme, angle, document type) when creating a new Project. Uses the Project Advisor agent role. | "onboarding", "wizard" |
-| **Project Advisor** | Agent Role that runs the Setup Chat — grills the user to establish Project parameters, then suggests Layouts. | "setup agent", "onboarding agent" |
-| **Document Type** | The kind of writing the user is producing (Book, Article, Essay, Investigative Journalism), established during Setup Chat — never selected via a dropdown. | "genre" |
-| **Layout** | A structural template suggested by the Project Advisor at the end of Setup Chat. Defines sections, their order, and purpose. The user picks one Layout to anchor the Project. | "template", "structure", "outline skeleton" |
-| **Angle Explorer** | Agent Role that takes a topic + Document Type and returns a set of possible angles for the user to choose from. | |
-| **Outline Generator** | Agent Role that converts a chosen angle into a hierarchical document outline. | |
+| **Interview** | The AI-driven conversational flow that opens a new Project. The Project Advisor asks questions until it signals readiness; the user confirms by clicking Done. Runs pre-project on the HomeScreen. | "onboarding", "wizard", "setup chat" |
+| **Transcript** | The saved record of an Interview: the full chat log plus an AI-generated summary of goals and constraints. Stored per Project. Displayed read-only in the Transcript tab. | "chat history", "session log" |
+| **Project Advisor** | Agent Role that runs the Interview — grills the user to establish topic, Document Type, and enough context to generate a Transcript summary. | "setup agent", "onboarding agent" |
+| **Document Type** | The kind of writing the user is producing (Book, Article, Essay, Investigative Journalism), established during the Interview — never selected via a dropdown. | "genre" |
+| **Approach** | The single strategic framing chosen for a Project: how the document will be written and argued. Shape: `{title, description}`. Derived from the Transcript. Replaces the former Angle + Theme split. | "angle", "theme", "purpose", "lens" |
+| **Approach Explorer** | Agent Role that generates 3 candidate Approaches from the Transcript. The user picks one, edits inline, or requests a fresh batch. Confirms a single Approach to lock it. | "angle explorer" |
+| **Outline Generator** | Agent Role that takes the confirmed Approach and generates a full hierarchical document outline in one step. | |
 | **Research Agent** | Agent Role that performs web search + RAG to produce source-backed summary cards. | |
 | **Literature Review Synthesizer** | Agent Role that sweeps sources, curates, and synthesises a literature review section. | |
 | **Editor AI** | Agent Role that annotates a draft section with style/clarity and factual-grounding suggestions. | |
@@ -38,7 +39,7 @@ Managed by the Model Router. Users select Tier per role; they never enter raw mo
 | Agent Role | Free model (default) | Paid model |
 |-----------|---------------------|------------|
 | Project Advisor | `nousresearch/hermes-3-llama-3.1-405b:free` | `anthropic/claude-sonnet-4.6` |
-| Angle Explorer | `nousresearch/hermes-3-llama-3.1-405b:free` | `anthropic/claude-opus-4.7` |
+| Approach Explorer | `nousresearch/hermes-3-llama-3.1-405b:free` | `anthropic/claude-opus-4.7` |
 | Research Agent | `meta-llama/llama-3.3-70b-instruct:free` | `google/gemini-2.5-flash` |
 | Literature Review Synthesizer | `nousresearch/hermes-3-llama-3.1-405b:free` | `google/gemini-2.5-flash` |
 | Editor AI | `meta-llama/llama-3.3-70b-instruct:free` | `anthropic/claude-sonnet-4.6` |

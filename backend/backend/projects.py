@@ -51,6 +51,37 @@ CREATE TABLE IF NOT EXISTS transcript (
 )
 """
 
+_UPSERT_TRANSCRIPT = """
+INSERT INTO transcript (id, project_id, messages, summary, created_at)
+VALUES (?, ?, ?, ?, ?)
+ON CONFLICT(project_id) DO UPDATE SET
+    messages = excluded.messages,
+    summary = excluded.summary,
+    created_at = excluded.created_at
+"""
+
+_SELECT_TRANSCRIPT = """
+SELECT id, project_id, messages, summary, created_at FROM transcript WHERE project_id = ?
+"""
+
+
+@dataclass
+class Transcript:
+    id: str
+    project_id: str
+    messages: list[dict]
+    summary: str
+    created_at: str
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "project_id": self.project_id,
+            "messages": self.messages,
+            "summary": self.summary,
+            "created_at": self.created_at,
+        }
+
 
 @dataclass
 class Project:
@@ -229,6 +260,25 @@ class ProjectService:
         con.commit()
         con.close()
         return Approach(id=approach_id, project_id=project_id, title=approach["title"], description=approach["description"])
+
+    def save_transcript(self, project_id: str, messages: list[dict], summary: str) -> Transcript:
+        transcript_id = str(uuid.uuid4())
+        created_at = datetime.now(timezone.utc).isoformat()
+        con = self._db(project_id)
+        con.execute(_UPSERT_TRANSCRIPT, (transcript_id, project_id, json.dumps(messages), summary, created_at))
+        con.commit()
+        con.close()
+        return Transcript(id=transcript_id, project_id=project_id, messages=messages, summary=summary, created_at=created_at)
+
+    def get_transcript(self, project_id: str) -> Transcript | None:
+        if not (self._projects_dir / project_id / "db.sqlite").exists():
+            return None
+        con = self._db(project_id)
+        row = con.execute(_SELECT_TRANSCRIPT, (project_id,)).fetchone()
+        con.close()
+        if row is None:
+            return None
+        return Transcript(id=row[0], project_id=row[1], messages=json.loads(row[2]), summary=row[3], created_at=row[4])
 
     def get_approach(self, project_id: str) -> Approach | None:
         if not (self._projects_dir / project_id / "db.sqlite").exists():
