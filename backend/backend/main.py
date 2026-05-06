@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 import httpx
 from fastapi import HTTPException
-from backend import setup_chat
+from backend import setup_chat, angle_explorer
 from backend.projects import ProjectService
 from backend.settings import Settings
 
@@ -71,6 +71,35 @@ def create_app(settings_path: Path | None = None, projects_dir: Path | None = No
             layout_id=body["layout_id"],
         )
         return project.to_dict()
+
+    @app.post("/projects/{project_id}/angles/propose")
+    async def post_angles_propose(project_id: str, body: dict):
+        if project_service.get(project_id) is None:
+            raise HTTPException(status_code=404, detail="Project not found")
+        try:
+            angles = await angle_explorer.call_llm(
+                body["topic"],
+                body["document_type"],
+                role="angle_explorer",
+            )
+        except httpx.HTTPStatusError as e:
+            raise HTTPException(status_code=e.response.status_code, detail=str(e))
+        except RuntimeError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        return angles
+
+    @app.patch("/projects/{project_id}/angles")
+    async def patch_angles(project_id: str, body: dict):
+        if project_service.get(project_id) is None:
+            raise HTTPException(status_code=404, detail="Project not found")
+        saved = project_service.save_angles(project_id, body.get("angles", []))
+        return [a.to_dict() for a in saved]
+
+    @app.get("/projects/{project_id}/angles")
+    async def get_angles(project_id: str):
+        if project_service.get(project_id) is None:
+            raise HTTPException(status_code=404, detail="Project not found")
+        return [a.to_dict() for a in project_service.get_angles(project_id)]
 
     @app.post("/setup/chat")
     async def post_setup_chat(body: dict):

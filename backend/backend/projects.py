@@ -1,8 +1,44 @@
+from __future__ import annotations
+
 import sqlite3
 import uuid
 from dataclasses import dataclass, asdict
 from datetime import datetime, timezone
 from pathlib import Path
+
+AngleStatus = str  # "accepted" | "rejected" | "pending"
+
+
+@dataclass
+class Angle:
+    id: str
+    project_id: str
+    title: str
+    description: str
+    status: AngleStatus
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+
+_CREATE_ANGLES_TABLE = """
+CREATE TABLE IF NOT EXISTS angles (
+    id          TEXT PRIMARY KEY,
+    project_id  TEXT NOT NULL,
+    title       TEXT NOT NULL,
+    description TEXT NOT NULL,
+    status      TEXT NOT NULL
+)
+"""
+
+_INSERT_ANGLE = """
+INSERT INTO angles (id, project_id, title, description, status)
+VALUES (?, ?, ?, ?, ?)
+"""
+
+_SELECT_ANGLES = """
+SELECT id, project_id, title, description, status FROM angles
+"""
 
 
 @dataclass
@@ -105,3 +141,29 @@ class ProjectService:
         row = con.execute(_SELECT_ONE).fetchone()
         con.close()
         return Project(*row) if row else None
+
+    def _db(self, project_id: str) -> sqlite3.Connection:
+        db_path = self._projects_dir / project_id / "db.sqlite"
+        con = sqlite3.connect(db_path)
+        con.execute(_CREATE_ANGLES_TABLE)
+        return con
+
+    def save_angles(self, project_id: str, angles: list[dict]) -> list[Angle]:
+        accepted = [a for a in angles if a.get("status") == "accepted"]
+        con = self._db(project_id)
+        saved: list[Angle] = []
+        for a in accepted:
+            angle_id = str(uuid.uuid4())
+            con.execute(_INSERT_ANGLE, (angle_id, project_id, a["title"], a["description"], "accepted"))
+            saved.append(Angle(id=angle_id, project_id=project_id, title=a["title"], description=a["description"], status="accepted"))
+        con.commit()
+        con.close()
+        return saved
+
+    def get_angles(self, project_id: str) -> list[Angle]:
+        if not (self._projects_dir / project_id / "db.sqlite").exists():
+            return []
+        con = self._db(project_id)
+        rows = con.execute(_SELECT_ANGLES).fetchall()
+        con.close()
+        return [Angle(*row) for row in rows]
