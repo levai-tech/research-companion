@@ -74,70 +74,51 @@ def create_app(settings_path: Path | None = None, projects_dir: Path | None = No
         project = project_service.create(
             title=body["title"],
             topic=body["topic"],
-            theme=body["theme"],
-            angle=body["angle"],
             document_type=body["document_type"],
-            layout_id=body["layout_id"],
         )
         return project.to_dict()
 
-    @app.post("/projects/{project_id}/angles/propose")
-    async def post_angles_propose(project_id: str, body: dict):
+    @app.post("/projects/{project_id}/approaches/propose")
+    async def post_approaches_propose(project_id: str, body: dict):
         if project_service.get(project_id) is None:
             raise HTTPException(status_code=404, detail="Project not found")
         try:
-            angles = await angle_explorer.call_llm(
+            approaches = await angle_explorer.call_llm(
                 body["topic"],
                 body["document_type"],
-                role="angle_explorer",
+                role="approach_explorer",
             )
         except httpx.HTTPStatusError as e:
             raise _llm_error(e)
         except RuntimeError as e:
             raise HTTPException(status_code=400, detail=str(e))
-        return angles
+        return approaches
 
-    @app.patch("/projects/{project_id}/angles")
-    async def patch_angles(project_id: str, body: dict):
+    @app.patch("/projects/{project_id}/approach")
+    async def patch_approach(project_id: str, body: dict):
         if project_service.get(project_id) is None:
             raise HTTPException(status_code=404, detail="Project not found")
-        saved = project_service.save_angles(project_id, body.get("angles", []))
-        return [a.to_dict() for a in saved]
+        saved = project_service.save_approach(project_id, body["approach"])
+        return saved.to_dict()
 
-    @app.get("/projects/{project_id}/angles")
-    async def get_angles(project_id: str):
+    @app.get("/projects/{project_id}/approach")
+    async def get_approach(project_id: str):
         if project_service.get(project_id) is None:
             raise HTTPException(status_code=404, detail="Project not found")
-        return [a.to_dict() for a in project_service.get_angles(project_id)]
-
-    @app.post("/projects/{project_id}/outline/structures")
-    async def post_outline_structures(project_id: str):
-        if project_service.get(project_id) is None:
-            raise HTTPException(status_code=404, detail="Project not found")
-        project = project_service.get(project_id)
-        angles = [a.to_dict() for a in project_service.get_angles(project_id)]
-        try:
-            structures = await outline_generator.propose_structures(
-                angles,
-                project.document_type,
-                role="outline_generator",
-            )
-        except httpx.HTTPStatusError as e:
-            raise _llm_error(e)
-        except RuntimeError as e:
-            raise HTTPException(status_code=400, detail=str(e))
-        return structures
+        approach = project_service.get_approach(project_id)
+        return approach.to_dict() if approach else None
 
     @app.post("/projects/{project_id}/outline/generate")
     async def post_outline_generate(project_id: str, body: dict):
         if project_service.get(project_id) is None:
             raise HTTPException(status_code=404, detail="Project not found")
         project = project_service.get(project_id)
-        angles = [a.to_dict() for a in project_service.get_angles(project_id)]
+        approach = project_service.get_approach(project_id)
+        approach_dict = approach.to_dict() if approach else {}
         structure = body["structure"]
         try:
             sections = await outline_generator.generate_outline(
-                angles,
+                approach_dict,
                 project.document_type,
                 structure,
                 role="outline_generator",

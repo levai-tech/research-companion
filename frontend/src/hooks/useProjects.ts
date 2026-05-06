@@ -5,10 +5,7 @@ export interface Project {
   id: string;
   title: string;
   topic: string;
-  theme: string;
-  angle: string;
   document_type: string;
-  layout_id: string;
   last_modified: string;
 }
 

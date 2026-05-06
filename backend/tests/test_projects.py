@@ -13,10 +13,7 @@ def _make_project(svc, **overrides):
     defaults = dict(
         title="Test Book",
         topic="Quantum computing",
-        theme="Accessibility of complex tech",
-        angle="The human cost of ignoring quantum-resistant encryption",
         document_type="book",
-        layout_id="three-act",
     )
     return svc.create(**{**defaults, **overrides})
 
@@ -33,16 +30,16 @@ def test_create_makes_project_dir_with_db_and_sources(svc, tmp_path):
 
 
 def test_create_returns_project_with_correct_metadata(svc):
-    project = _make_project(svc, title="My Essay", document_type="essay", layout_id="classic")
+    project = _make_project(svc, title="My Essay", document_type="essay")
 
     assert project.title == "My Essay"
     assert project.topic == "Quantum computing"
-    assert project.theme == "Accessibility of complex tech"
-    assert project.angle == "The human cost of ignoring quantum-resistant encryption"
     assert project.document_type == "essay"
-    assert project.layout_id == "classic"
     assert project.id  # non-empty UUID
     assert project.last_modified  # non-empty ISO timestamp
+    assert not hasattr(project, "theme")
+    assert not hasattr(project, "angle")
+    assert not hasattr(project, "layout_id")
 
 
 # ── Behavior 2: list ──────────────────────────────────────────────────────────
@@ -64,13 +61,12 @@ def test_list_returns_all_created_projects(svc):
 
 
 def test_list_preserves_metadata(svc):
-    original = _make_project(svc, title="Deep Dive", document_type="article", layout_id="inverted-pyramid")
+    original = _make_project(svc, title="Deep Dive", document_type="article")
 
     listed = svc.list()[0]
     assert listed.id == original.id
     assert listed.title == "Deep Dive"
     assert listed.document_type == "article"
-    assert listed.layout_id == "inverted-pyramid"
     assert listed.last_modified == original.last_modified
 
 
@@ -84,10 +80,7 @@ def app(tmp_path):
 _CREATE_BODY = dict(
     title="Deep Dive",
     topic="Quantum computing",
-    theme="Accessibility of complex tech",
-    angle="The human cost of ignoring quantum-resistant encryption",
     document_type="book",
-    layout_id="three-act",
 )
 
 
@@ -100,9 +93,11 @@ async def test_post_projects_creates_and_returns_project(app):
     body = response.json()
     assert body["title"] == "Deep Dive"
     assert body["document_type"] == "book"
-    assert body["layout_id"] == "three-act"
     assert "id" in body
     assert "last_modified" in body
+    assert "theme" not in body
+    assert "angle" not in body
+    assert "layout_id" not in body
 
 
 async def test_get_projects_returns_created_project(app):
@@ -115,3 +110,6 @@ async def test_get_projects_returns_created_project(app):
     projects = response.json()
     assert len(projects) == 1
     assert projects[0]["title"] == "Deep Dive"
+    assert "theme" not in projects[0]
+    assert "angle" not in projects[0]
+    assert "layout_id" not in projects[0]

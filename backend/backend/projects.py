@@ -7,38 +7,48 @@ from dataclasses import dataclass, asdict, field
 from datetime import datetime, timezone
 from pathlib import Path
 
-AngleStatus = str  # "accepted" | "rejected" | "pending"
-
 
 @dataclass
-class Angle:
+class Approach:
     id: str
     project_id: str
     title: str
     description: str
-    status: AngleStatus
 
     def to_dict(self) -> dict:
         return asdict(self)
 
 
-_CREATE_ANGLES_TABLE = """
-CREATE TABLE IF NOT EXISTS angles (
+_CREATE_APPROACHES_TABLE = """
+CREATE TABLE IF NOT EXISTS approaches (
     id          TEXT PRIMARY KEY,
-    project_id  TEXT NOT NULL,
+    project_id  TEXT NOT NULL UNIQUE,
     title       TEXT NOT NULL,
-    description TEXT NOT NULL,
-    status      TEXT NOT NULL
+    description TEXT NOT NULL
 )
 """
 
-_INSERT_ANGLE = """
-INSERT INTO angles (id, project_id, title, description, status)
-VALUES (?, ?, ?, ?, ?)
+_UPSERT_APPROACH = """
+INSERT INTO approaches (id, project_id, title, description)
+VALUES (?, ?, ?, ?)
+ON CONFLICT(project_id) DO UPDATE SET
+    id = excluded.id,
+    title = excluded.title,
+    description = excluded.description
 """
 
-_SELECT_ANGLES = """
-SELECT id, project_id, title, description, status FROM angles
+_SELECT_APPROACH = """
+SELECT id, project_id, title, description FROM approaches WHERE project_id = ?
+"""
+
+_CREATE_TRANSCRIPT_TABLE = """
+CREATE TABLE IF NOT EXISTS transcript (
+    id         TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL UNIQUE,
+    messages   TEXT NOT NULL,
+    summary    TEXT NOT NULL,
+    created_at TEXT NOT NULL
+)
 """
 
 
@@ -47,10 +57,7 @@ class Project:
     id: str
     title: str
     topic: str
-    theme: str
-    angle: str
     document_type: str
-    layout_id: str
     last_modified: str
 
     def to_dict(self) -> dict:
@@ -62,22 +69,19 @@ CREATE TABLE IF NOT EXISTS project_meta (
     id            TEXT PRIMARY KEY,
     title         TEXT NOT NULL,
     topic         TEXT NOT NULL,
-    theme         TEXT NOT NULL,
-    angle         TEXT NOT NULL,
     document_type TEXT NOT NULL,
-    layout_id     TEXT NOT NULL,
     last_modified TEXT NOT NULL
 )
 """
 
 _INSERT = """
 INSERT INTO project_meta
-    (id, title, topic, theme, angle, document_type, layout_id, last_modified)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    (id, title, topic, document_type, last_modified)
+VALUES (?, ?, ?, ?, ?)
 """
 
 _SELECT_ONE = """
-SELECT id, title, topic, theme, angle, document_type, layout_id, last_modified
+SELECT id, title, topic, document_type, last_modified
 FROM project_meta LIMIT 1
 """
 
@@ -164,10 +168,7 @@ class ProjectService:
         self,
         title: str,
         topic: str,
-        theme: str,
-        angle: str,
         document_type: str,
-        layout_id: str,
     ) -> Project:
         project_id = str(uuid.uuid4())
         project_dir = self._projects_dir / project_id
@@ -178,7 +179,7 @@ class ProjectService:
 
         con = sqlite3.connect(project_dir / "db.sqlite")
         con.execute(_CREATE_TABLE)
-        con.execute(_INSERT, (project_id, title, topic, theme, angle, document_type, layout_id, last_modified))
+        con.execute(_INSERT, (project_id, title, topic, document_type, last_modified))
         con.commit()
         con.close()
 
@@ -186,10 +187,7 @@ class ProjectService:
             id=project_id,
             title=title,
             topic=topic,
-            theme=theme,
-            angle=angle,
             document_type=document_type,
-            layout_id=layout_id,
             last_modified=last_modified,
         )
 
@@ -220,28 +218,25 @@ class ProjectService:
     def _db(self, project_id: str) -> sqlite3.Connection:
         db_path = self._projects_dir / project_id / "db.sqlite"
         con = sqlite3.connect(db_path)
-        con.execute(_CREATE_ANGLES_TABLE)
+        con.execute(_CREATE_APPROACHES_TABLE)
+        con.execute(_CREATE_TRANSCRIPT_TABLE)
         return con
 
-    def save_angles(self, project_id: str, angles: list[dict]) -> list[Angle]:
-        accepted = [a for a in angles if a.get("status") == "accepted"]
+    def save_approach(self, project_id: str, approach: dict) -> Approach:
+        approach_id = str(uuid.uuid4())
         con = self._db(project_id)
-        saved: list[Angle] = []
-        for a in accepted:
-            angle_id = str(uuid.uuid4())
-            con.execute(_INSERT_ANGLE, (angle_id, project_id, a["title"], a["description"], "accepted"))
-            saved.append(Angle(id=angle_id, project_id=project_id, title=a["title"], description=a["description"], status="accepted"))
+        con.execute(_UPSERT_APPROACH, (approach_id, project_id, approach["title"], approach["description"]))
         con.commit()
         con.close()
-        return saved
+        return Approach(id=approach_id, project_id=project_id, title=approach["title"], description=approach["description"])
 
-    def get_angles(self, project_id: str) -> list[Angle]:
+    def get_approach(self, project_id: str) -> Approach | None:
         if not (self._projects_dir / project_id / "db.sqlite").exists():
-            return []
+            return None
         con = self._db(project_id)
-        rows = con.execute(_SELECT_ANGLES).fetchall()
+        row = con.execute(_SELECT_APPROACH, (project_id,)).fetchone()
         con.close()
-        return [Angle(*row) for row in rows]
+        return Approach(*row) if row else None
 
     def save_outline(
         self,
