@@ -29,6 +29,27 @@ function mockPropose(angles = PROPOSED_ANGLES) {
 // ── Behavior 5: renders proposed angles ───────────────────────────────────────
 
 describe("AngleExplorer", () => {
+  // ── Behavior 10: icon controls render on each card ───────────────────────────
+
+  it("shows tick, cross, and pencil icon controls on each angle card", async () => {
+    global.fetch = mockPropose();
+
+    render(
+      <AngleExplorer
+        projectId="proj-1"
+        topic="Quantum computing"
+        documentType="book"
+        onComplete={vi.fn()}
+      />,
+    );
+
+    await screen.findByText("The Clock Is Ticking");
+
+    expect(screen.getAllByRole("button", { name: /^accept$/i })).toHaveLength(3);
+    expect(screen.getAllByRole("button", { name: /^remove$/i })).toHaveLength(3);
+    expect(screen.getAllByRole("button", { name: /^edit$/i })).toHaveLength(3);
+  });
+
   it("shows proposed angles with title and description on mount", async () => {
     global.fetch = mockPropose();
 
@@ -73,9 +94,9 @@ describe("AngleExplorer", () => {
     expect(acceptButtons[0]).toHaveAttribute("aria-pressed", "true");
   });
 
-  // ── Behavior 7: reject an angle ───────────────────────────────────────────────
+  // ── Behavior 11: cross removes card from list ─────────────────────────────────
 
-  it("marks an angle rejected when user clicks Reject", async () => {
+  it("removes an angle card when user clicks Remove", async () => {
     global.fetch = mockPropose();
 
     render(
@@ -89,15 +110,16 @@ describe("AngleExplorer", () => {
 
     await screen.findByText("The Clock Is Ticking");
 
-    const rejectButtons = screen.getAllByRole("button", { name: /reject/i });
-    await userEvent.click(rejectButtons[0]);
+    const removeButtons = screen.getAllByRole("button", { name: /^remove$/i });
+    await userEvent.click(removeButtons[0]);
 
-    expect(rejectButtons[0]).toHaveAttribute("aria-pressed", "true");
+    expect(screen.queryByText("The Clock Is Ticking")).not.toBeInTheDocument();
+    expect(screen.getByText("Ordinary People, Extraordinary Risk")).toBeInTheDocument();
   });
 
-  // ── Behavior 8: edit an angle title inline ────────────────────────────────────
+  // ── Behavior 12: undo toast restores removed card ─────────────────────────────
 
-  it("lets user edit an angle title inline", async () => {
+  it("shows undo toast after remove and restores card on undo click", async () => {
     global.fetch = mockPropose();
 
     render(
@@ -111,29 +133,55 @@ describe("AngleExplorer", () => {
 
     await screen.findByText("The Clock Is Ticking");
 
-    const editButtons = screen.getAllByRole("button", { name: /edit/i });
+    await userEvent.click(screen.getAllByRole("button", { name: /^remove$/i })[0]);
+
+    expect(screen.queryByText("The Clock Is Ticking")).not.toBeInTheDocument();
+    expect(screen.getByRole("status")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: /undo/i }));
+
+    expect(screen.getByText("The Clock Is Ticking")).toBeInTheDocument();
+  });
+
+  // ── Behavior 8: edit an angle title and description inline ───────────────────
+
+  it("lets user edit title and description inline via pencil", async () => {
+    global.fetch = mockPropose();
+
+    render(
+      <AngleExplorer
+        projectId="proj-1"
+        topic="Quantum computing"
+        documentType="book"
+        onComplete={vi.fn()}
+      />,
+    );
+
+    await screen.findByText("The Clock Is Ticking");
+
+    const editButtons = screen.getAllByRole("button", { name: /^edit$/i });
     await userEvent.click(editButtons[0]);
 
     const titleInput = screen.getByDisplayValue("The Clock Is Ticking");
     await userEvent.clear(titleInput);
     await userEvent.type(titleInput, "Time Is Running Out");
 
+    const descInput = screen.getByDisplayValue("How quantum computers will crack today's encryption.");
+    await userEvent.clear(descInput);
+    await userEvent.type(descInput, "The countdown has begun.");
+
     expect(screen.getByDisplayValue("Time Is Running Out")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("The countdown has begun.")).toBeInTheDocument();
   });
 
-  // ── Behavior 9: confirm calls PATCH and fires onComplete ──────────────────────
+  // ── Behavior 9: confirm PATCH sends remaining cards, fires onComplete ─────────
 
-  it("calls PATCH with accepted angles and fires onComplete on confirm", async () => {
+  it("calls PATCH with remaining angles (excluding removed) and fires onComplete", async () => {
     const onComplete = vi.fn();
 
     global.fetch = vi.fn()
       .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(PROPOSED_ANGLES) } as Response)
-      .mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve([
-          { id: "a1", project_id: "proj-1", title: "The Clock Is Ticking", description: "...", status: "accepted" },
-        ]),
-      } as Response);
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve([]) } as Response);
 
     render(
       <AngleExplorer
@@ -146,19 +194,19 @@ describe("AngleExplorer", () => {
 
     await screen.findByText("The Clock Is Ticking");
 
-    // Accept the first angle
-    await userEvent.click(screen.getAllByRole("button", { name: /accept/i })[0]);
+    // Accept first angle, remove second
+    await userEvent.click(screen.getAllByRole("button", { name: /^accept$/i })[0]);
+    await userEvent.click(screen.getAllByRole("button", { name: /^remove$/i })[0]);
 
-    // Confirm
     await userEvent.click(screen.getByRole("button", { name: /confirm/i }));
 
-    expect(global.fetch).toHaveBeenCalledWith(
-      "http://127.0.0.1:8000/projects/proj-1/angles",
-      expect.objectContaining({
-        method: "PATCH",
-        body: expect.stringContaining("accepted"),
-      }),
+    const patchCall = (global.fetch as ReturnType<typeof vi.fn>).mock.calls.find(
+      ([url]: [string]) => url.endsWith("/angles") && !url.endsWith("/propose"),
     );
+    const body = JSON.parse(patchCall[1].body);
+    expect(body.angles).toHaveLength(2);
+    expect(body.angles.some((a: { title: string }) => a.title === "The Clock Is Ticking")).toBe(false);
+
     await vi.waitFor(() => expect(onComplete).toHaveBeenCalledTimes(1));
   });
 });
