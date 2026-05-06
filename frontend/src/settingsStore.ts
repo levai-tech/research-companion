@@ -1,10 +1,8 @@
 import { create } from "zustand";
 import { useAppStore } from "./store";
 
-export type Tier = "free" | "paid";
-
 export interface RoleConfig {
-  tier: Tier;
+  model: string;
 }
 
 export interface OllamaConfig {
@@ -22,7 +20,7 @@ interface SettingsState {
   settings: AppSettings | null;
   keysMask: Record<string, boolean>;
   loadSettings: () => Promise<string | null>;
-  updateRoleTier: (role: string, tier: Tier) => Promise<void>;
+  updateRoleModel: (role: string, model: string) => Promise<void>;
   updateSettings: (patch: object) => Promise<void>;
   saveApiKey: (name: string, value: string) => Promise<void>;
   loadKeysMask: () => Promise<void>;
@@ -39,9 +37,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
 
   loadSettings: async (): Promise<string | null> => {
     try {
-      const data: AppSettings = await fetch(`${baseUrl()}/settings`).then((r) =>
-        r.json()
-      );
+      const data: AppSettings = await fetch(`${baseUrl()}/settings`).then((r) => r.json());
       set({ settings: data });
       return null;
     } catch (e) {
@@ -49,11 +45,11 @@ export const useSettingsStore = create<SettingsState>((set) => ({
     }
   },
 
-  updateRoleTier: async (role, tier) => {
+  updateRoleModel: async (role, model) => {
     const data: AppSettings = await fetch(`${baseUrl()}/settings`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ roles: { [role]: { tier } } }),
+      body: JSON.stringify({ roles: { [role]: { model } } }),
     }).then((r) => r.json());
     set({ settings: data });
   },

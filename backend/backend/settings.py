@@ -9,12 +9,12 @@ _KEYCHAIN_SERVICE = "research-companion"
 
 _DEFAULTS: dict = {
     "roles": {
-        "project_advisor": {"tier": "free"},
-        "angle_explorer": {"tier": "free"},
-        "research_agent": {"tier": "free"},
-        "literature_review": {"tier": "free"},
-        "editor_ai": {"tier": "free"},
-        "outline_generator": {"tier": "free"},
+        "project_advisor": {"model": "mistralai/mistral-7b-instruct:free"},
+        "angle_explorer": {"model": "mistralai/mistral-7b-instruct:free"},
+        "research_agent": {"model": "mistralai/mistral-7b-instruct:free"},
+        "literature_review": {"model": "mistralai/mistral-7b-instruct:free"},
+        "editor_ai": {"model": "mistralai/mistral-7b-instruct:free"},
+        "outline_generator": {"model": "mistralai/mistral-7b-instruct:free"},
     },
     "search_provider": "tavily",
     "ollama": {

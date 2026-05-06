@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { ArrowLeft } from "lucide-react";
-import { useSettingsStore, type Tier } from "../settingsStore";
+import { useSettingsStore } from "../settingsStore";
 import { useAppStore } from "../store";
 import { Button } from "@/components/ui/button";
 
@@ -13,28 +13,10 @@ const ROLES: { key: string; label: string }[] = [
   { key: "outline_generator", label: "Outline Generator" },
 ];
 
-const FREE_MODELS: Record<string, string> = {
-  project_advisor: "GPT OSS 20B (free)",
-  angle_explorer: "Hermes 3 405B (free)",
-  research_agent: "Llama 3.3 70B (free)",
-  literature_review: "Hermes 3 405B (free)",
-  editor_ai: "Llama 3.3 70B (free)",
-  outline_generator: "Qwen3 Next 80B (free)",
-};
-
-const PAID_MODELS: Record<string, string> = {
-  project_advisor: "Claude Sonnet 4.6",
-  angle_explorer: "Claude Opus 4.7",
-  research_agent: "Gemini 2.5 Flash",
-  literature_review: "Gemini 2.5 Flash",
-  editor_ai: "Claude Sonnet 4.6",
-  outline_generator: "Claude Sonnet 4.6",
-};
-
 const SEARCH_PROVIDERS = ["tavily", "brave"];
 
 export default function SettingsPage({ onClose }: { onClose: () => void }) {
-  const { settings, keysMask, loadSettings, loadKeysMask, updateRoleTier, updateSettings, saveApiKey } =
+  const { settings, keysMask, loadSettings, loadKeysMask, updateRoleModel, updateSettings, saveApiKey } =
     useSettingsStore();
   const backendPort = useAppStore((s) => s.backendPort);
 
@@ -129,37 +111,20 @@ export default function SettingsPage({ onClose }: { onClose: () => void }) {
       <section className="space-y-4">
         <h2 className="text-base font-medium border-b pb-2">Model Router</h2>
         <p className="text-sm text-muted-foreground">
-          Choose Free or Paid per agent role. Defaults to Free.
+          Paste any OpenRouter model ID (e.g. <code className="font-mono text-xs">anthropic/claude-sonnet-4.6</code>).
+          Find available models at <span className="font-mono text-xs">openrouter.ai/models</span>.
         </p>
 
         <div className="space-y-3">
           {ROLES.map(({ key, label }) => {
-            const tier: Tier = settings.roles[key]?.tier ?? "free";
+            const model = settings.roles[key]?.model ?? "";
             return (
-              <div key={key} className="flex items-center justify-between rounded-lg border px-4 py-3">
-                <div>
-                  <p className="text-sm font-medium">{label}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {tier === "free" ? FREE_MODELS[key] : PAID_MODELS[key]}
-                  </p>
-                </div>
-                <div className="flex gap-2">
-                  <Button
-                    size="sm"
-                    variant={tier === "free" ? "default" : "outline"}
-                    onClick={() => updateRoleTier(key, "free")}
-                  >
-                    Free
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant={tier === "paid" ? "default" : "outline"}
-                    onClick={() => updateRoleTier(key, "paid")}
-                  >
-                    Paid
-                  </Button>
-                </div>
-              </div>
+              <EditableField
+                key={key}
+                label={label}
+                value={model}
+                onSave={(v) => updateRoleModel(key, v)}
+              />
             );
           })}
         </div>

@@ -22,27 +22,25 @@ def settings(tmp_settings_path):
 
 def test_get_returns_defaults_when_file_absent(settings):
     result = settings.get()
-    assert result["roles"]["angle_explorer"]["tier"] == "free"
-    assert result["roles"]["research_agent"]["tier"] == "free"
-    assert result["roles"]["literature_review"]["tier"] == "free"
-    assert result["roles"]["editor_ai"]["tier"] == "free"
-    assert result["roles"]["outline_generator"]["tier"] == "free"
+    default_model = "mistralai/mistral-7b-instruct:free"
+    for role in ["angle_explorer", "research_agent", "literature_review", "editor_ai", "outline_generator"]:
+        assert result["roles"][role]["model"] == default_model, f"{role} missing default model"
     assert result["search_provider"] == "tavily"
     assert result["ollama"]["endpoint"] == "http://localhost:11434"
     assert result["ollama"]["embedding_model"] == "nomic-embed-text"
 
 
-def test_update_persists_role_tier(settings, tmp_settings_path):
-    settings.update({"roles": {"research_agent": {"tier": "paid"}}})
+def test_update_persists_role_model(settings, tmp_settings_path):
+    settings.update({"roles": {"research_agent": {"model": "google/gemini-2.5-flash"}}})
     data = json.loads(tmp_settings_path.read_text())
-    assert data["roles"]["research_agent"]["tier"] == "paid"
+    assert data["roles"]["research_agent"]["model"] == "google/gemini-2.5-flash"
 
 
 def test_update_merges_not_replaces(settings):
-    settings.update({"roles": {"research_agent": {"tier": "paid"}}})
+    settings.update({"roles": {"research_agent": {"model": "google/gemini-2.5-flash"}}})
     result = settings.get()
-    assert result["roles"]["angle_explorer"]["tier"] == "free"
-    assert result["roles"]["research_agent"]["tier"] == "paid"
+    assert result["roles"]["angle_explorer"]["model"] == "mistralai/mistral-7b-instruct:free"
+    assert result["roles"]["research_agent"]["model"] == "google/gemini-2.5-flash"
 
 
 def test_update_persists_ollama_endpoint(settings, tmp_settings_path):
@@ -100,19 +98,19 @@ async def test_get_settings_returns_defaults(app):
         response = await client.get("/settings")
     assert response.status_code == 200
     body = response.json()
-    assert body["roles"]["angle_explorer"]["tier"] == "free"
+    assert body["roles"]["angle_explorer"]["model"] == "mistralai/mistral-7b-instruct:free"
     assert body["search_provider"] == "tavily"
     assert body["ollama"]["embedding_model"] == "nomic-embed-text"
 
 
-async def test_put_settings_updates_role_tier(app):
+async def test_put_settings_updates_role_model(app):
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
-        put_resp = await client.put("/settings", json={"roles": {"editor_ai": {"tier": "paid"}}})
+        put_resp = await client.put("/settings", json={"roles": {"editor_ai": {"model": "anthropic/claude-sonnet-4.6"}}})
         assert put_resp.status_code == 200
         body = (await client.get("/settings")).json()
-    assert body["roles"]["editor_ai"]["tier"] == "paid"
-    assert body["roles"]["angle_explorer"]["tier"] == "free"
+    assert body["roles"]["editor_ai"]["model"] == "anthropic/claude-sonnet-4.6"
+    assert body["roles"]["angle_explorer"]["model"] == "mistralai/mistral-7b-instruct:free"
 
 
 async def test_get_keys_mask_returns_booleans(app):

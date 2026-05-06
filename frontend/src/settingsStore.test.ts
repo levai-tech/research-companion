@@ -1,4 +1,4 @@
-import { renderHook, act, waitFor } from "@testing-library/react";
+import { renderHook, act } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { useSettingsStore } from "./settingsStore";
 import { useAppStore } from "./store";
@@ -11,11 +11,11 @@ beforeEach(() => {
 
 const mockSettings = {
   roles: {
-    angle_explorer: { tier: "free" },
-    research_agent: { tier: "free" },
-    literature_review: { tier: "free" },
-    editor_ai: { tier: "free" },
-    outline_generator: { tier: "free" },
+    angle_explorer: { model: "mistralai/mistral-7b-instruct:free" },
+    research_agent: { model: "mistralai/mistral-7b-instruct:free" },
+    literature_review: { model: "mistralai/mistral-7b-instruct:free" },
+    editor_ai: { model: "mistralai/mistral-7b-instruct:free" },
+    outline_generator: { model: "mistralai/mistral-7b-instruct:free" },
   },
   search_provider: "tavily",
   ollama: { endpoint: "http://localhost:11434", embedding_model: "nomic-embed-text" },
@@ -33,32 +33,32 @@ describe("useSettingsStore", () => {
 
     expect(global.fetch).toHaveBeenCalledWith("http://127.0.0.1:8099/settings");
     expect(result.current.settings?.search_provider).toBe("tavily");
-    expect(result.current.settings?.roles.angle_explorer.tier).toBe("free");
+    expect(result.current.settings?.roles.angle_explorer.model).toBe("mistralai/mistral-7b-instruct:free");
   });
 
-  it("updateRoleTier PUTs to backend and updates local state", async () => {
+  it("updateRoleModel PUTs to backend and updates local state", async () => {
     useSettingsStore.setState({ settings: mockSettings, keysMask: {} });
 
     global.fetch = vi.fn().mockResolvedValue({
       json: () =>
         Promise.resolve({
           ...mockSettings,
-          roles: { ...mockSettings.roles, editor_ai: { tier: "paid" } },
+          roles: { ...mockSettings.roles, editor_ai: { model: "anthropic/claude-sonnet-4.6" } },
         }),
       ok: true,
     } as Response);
 
     const { result } = renderHook(() => useSettingsStore());
-    await act(() => result.current.updateRoleTier("editor_ai", "paid"));
+    await act(() => result.current.updateRoleModel("editor_ai", "anthropic/claude-sonnet-4.6"));
 
     expect(global.fetch).toHaveBeenCalledWith(
       "http://127.0.0.1:8099/settings",
       expect.objectContaining({
         method: "PUT",
-        body: JSON.stringify({ roles: { editor_ai: { tier: "paid" } } }),
+        body: JSON.stringify({ roles: { editor_ai: { model: "anthropic/claude-sonnet-4.6" } } }),
       })
     );
-    expect(result.current.settings?.roles.editor_ai.tier).toBe("paid");
+    expect(result.current.settings?.roles.editor_ai.model).toBe("anthropic/claude-sonnet-4.6");
   });
 
   it("saveApiKey PUTs to /settings/keys and does not store the value in state", async () => {
@@ -74,7 +74,6 @@ describe("useSettingsStore", () => {
         body: JSON.stringify({ openrouter_api_key: "sk-secret" }),
       })
     );
-    // key value must never appear in store state
     expect(JSON.stringify(result.current)).not.toContain("sk-secret");
   });
 
