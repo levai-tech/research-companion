@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 import httpx
 from fastapi import HTTPException
-from backend import setup_chat, angle_explorer
+from backend import interview, angle_explorer, outline_generator
 from backend.projects import ProjectService
 from backend.settings import Settings
 
@@ -19,6 +19,15 @@ def find_free_port() -> int:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.bind(("127.0.0.1", 0))
         return s.getsockname()[1]
+
+
+def _llm_error(e: httpx.HTTPStatusError) -> HTTPException:
+    try:
+        body = e.response.json()
+        openrouter_msg = (body.get("error") or {}).get("message") or str(body)
+    except Exception:
+        openrouter_msg = e.response.text or str(e)
+    return HTTPException(status_code=e.response.status_code, detail=openrouter_msg)
 
 
 def create_app(settings_path: Path | None = None, projects_dir: Path | None = None) -> FastAPI:
@@ -83,7 +92,7 @@ def create_app(settings_path: Path | None = None, projects_dir: Path | None = No
                 role="angle_explorer",
             )
         except httpx.HTTPStatusError as e:
-            raise HTTPException(status_code=e.response.status_code, detail=str(e))
+            raise _llm_error(e)
         except RuntimeError as e:
             raise HTTPException(status_code=400, detail=str(e))
         return angles
@@ -101,13 +110,58 @@ def create_app(settings_path: Path | None = None, projects_dir: Path | None = No
             raise HTTPException(status_code=404, detail="Project not found")
         return [a.to_dict() for a in project_service.get_angles(project_id)]
 
-    @app.post("/setup/chat")
-    async def post_setup_chat(body: dict):
+    @app.post("/projects/{project_id}/outline/structures")
+    async def post_outline_structures(project_id: str):
+        if project_service.get(project_id) is None:
+            raise HTTPException(status_code=404, detail="Project not found")
+        project = project_service.get(project_id)
+        angles = [a.to_dict() for a in project_service.get_angles(project_id)]
+        try:
+            structures = await outline_generator.propose_structures(
+                angles,
+                project.document_type,
+                role="outline_generator",
+            )
+        except httpx.HTTPStatusError as e:
+            raise _llm_error(e)
+        except RuntimeError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        return structures
+
+    @app.post("/projects/{project_id}/outline/generate")
+    async def post_outline_generate(project_id: str, body: dict):
+        if project_service.get(project_id) is None:
+            raise HTTPException(status_code=404, detail="Project not found")
+        project = project_service.get(project_id)
+        angles = [a.to_dict() for a in project_service.get_angles(project_id)]
+        structure = body["structure"]
+        try:
+            sections = await outline_generator.generate_outline(
+                angles,
+                project.document_type,
+                structure,
+                role="outline_generator",
+            )
+        except httpx.HTTPStatusError as e:
+            raise _llm_error(e)
+        except RuntimeError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        outline = project_service.save_outline(project_id, structure, sections)
+        return outline.to_dict()
+
+    @app.get("/projects/{project_id}/outline")
+    async def get_outline(project_id: str):
+        if project_service.get(project_id) is None:
+            raise HTTPException(status_code=404, detail="Project not found")
+        return project_service.get_outline(project_id).to_dict()
+
+    @app.post("/interview")
+    async def post_interview(body: dict):
         messages = body.get("messages", [])
         try:
-            result = await setup_chat.call_llm(messages)
+            result = await interview.call_llm(messages)
         except httpx.HTTPStatusError as e:
-            raise HTTPException(status_code=e.response.status_code, detail=str(e))
+            raise _llm_error(e)
         except RuntimeError as e:
             raise HTTPException(status_code=400, detail=str(e))
         if isinstance(result, dict) and result.get("phase") == "suggest":

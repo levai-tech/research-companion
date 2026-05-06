@@ -20,11 +20,11 @@ interface ChatMessage {
   content: string;
 }
 
-interface SetupChatProps {
+interface InterviewProps {
   onProjectCreated: (project: Project) => void;
 }
 
-export default function SetupChat({ onProjectCreated }: SetupChatProps) {
+export default function Interview({ onProjectCreated }: InterviewProps) {
   const port = useAppStore((s) => s.backendPort);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
@@ -38,7 +38,7 @@ export default function SetupChat({ onProjectCreated }: SetupChatProps) {
     setIsSending(true);
     setError(null);
     try {
-      const response = await fetch(`http://127.0.0.1:${port}/setup/chat`, {
+      const response = await fetch(`http://127.0.0.1:${port}/interview`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ messages: history }),

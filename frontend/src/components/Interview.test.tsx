@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import SetupChat from "./SetupChat";
+import Interview from "./Interview";
 import { useAppStore } from "../store";
 
 vi.mock("@tauri-apps/api/core", () => ({
@@ -33,20 +33,20 @@ const SUGGEST_RESPONSE = {
   },
 };
 
-// ── Behavior 9: setup chat conversation ───────────────────────────────────────
+// ── Behavior 9: interview conversation ───────────────────────────────────────
 
-describe("SetupChat", () => {
+describe("Interview", () => {
   it("shows the first AI question on mount", async () => {
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
       json: () => Promise.resolve(CHAT_RESPONSE),
     } as Response);
 
-    render(<SetupChat onProjectCreated={vi.fn()} />);
+    render(<Interview onProjectCreated={vi.fn()} />);
 
     await screen.findByText("What topic are you writing about?");
     expect(global.fetch).toHaveBeenCalledWith(
-      "http://127.0.0.1:8000/setup/chat",
+      "http://127.0.0.1:8000/interview",
       expect.objectContaining({ method: "POST" }),
     );
   });
@@ -56,7 +56,7 @@ describe("SetupChat", () => {
       .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(CHAT_RESPONSE) } as Response)
       .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ phase: "chat", message: "Interesting! What angle?" }) } as Response);
 
-    render(<SetupChat onProjectCreated={vi.fn()} />);
+    render(<Interview onProjectCreated={vi.fn()} />);
 
     await screen.findByText("What topic are you writing about?");
 
@@ -74,7 +74,7 @@ describe("SetupChat", () => {
       .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(CHAT_RESPONSE) } as Response)
       .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(SUGGEST_RESPONSE) } as Response);
 
-    render(<SetupChat onProjectCreated={vi.fn()} />);
+    render(<Interview onProjectCreated={vi.fn()} />);
 
     await screen.findByText("What topic are you writing about?");
     const input = screen.getByRole("textbox");
@@ -96,7 +96,7 @@ describe("SetupChat", () => {
         json: () => Promise.resolve({ id: "new-uuid", title: "My Project", ...SUGGEST_RESPONSE.project_metadata, layout_id: "three-act", last_modified: "2026-05-06T12:00:00+00:00" }),
       } as Response);
 
-    render(<SetupChat onProjectCreated={onProjectCreated} />);
+    render(<Interview onProjectCreated={onProjectCreated} />);
 
     await screen.findByText("What topic are you writing about?");
     await userEvent.type(screen.getByRole("textbox"), "Quantum computing for everyone");

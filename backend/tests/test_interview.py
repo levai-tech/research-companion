@@ -12,14 +12,14 @@ def app(tmp_path):
 
 # ── Behavior 5: first turn returns a question ─────────────────────────────────
 
-async def test_setup_chat_first_turn_returns_question(app):
+async def test_interview_first_turn_returns_question(app):
     transport = httpx.ASGITransport(app=app)
 
-    with patch("backend.setup_chat.call_llm", new_callable=AsyncMock) as mock_llm:
+    with patch("backend.interview.call_llm", new_callable=AsyncMock) as mock_llm:
         mock_llm.return_value = "What topic are you writing about?"
 
         async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
-            response = await client.post("/setup/chat", json={"messages": []})
+            response = await client.post("/interview", json={"messages": []})
 
     assert response.status_code == 200
     body = response.json()
@@ -30,7 +30,7 @@ async def test_setup_chat_first_turn_returns_question(app):
 
 # ── Behavior 6: suggest phase returns layouts ─────────────────────────────────
 
-async def test_setup_chat_returns_layouts_when_llm_signals_suggest(app):
+async def test_interview_returns_layouts_when_llm_signals_suggest(app):
     transport = httpx.ASGITransport(app=app)
 
     suggest_response = {
@@ -48,7 +48,7 @@ async def test_setup_chat_returns_layouts_when_llm_signals_suggest(app):
         },
     }
 
-    with patch("backend.setup_chat.call_llm", new_callable=AsyncMock) as mock_llm:
+    with patch("backend.interview.call_llm", new_callable=AsyncMock) as mock_llm:
         mock_llm.return_value = suggest_response
 
         async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
@@ -57,7 +57,7 @@ async def test_setup_chat_returns_layouts_when_llm_signals_suggest(app):
                 {"role": "assistant", "content": "What angle interests you most?"},
                 {"role": "user", "content": "The security implications for everyday people"},
             ]
-            response = await client.post("/setup/chat", json={"messages": messages})
+            response = await client.post("/interview", json={"messages": messages})
 
     assert response.status_code == 200
     body = response.json()
