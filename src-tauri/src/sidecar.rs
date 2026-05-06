@@ -31,14 +31,36 @@ pub fn start_backend(python: &str, backend_dir: &str) -> Result<SidecarHandle, s
         .env("PYTHONPATH", backend_dir)
         .current_dir(backend_dir)
         .spawn()?;
+
+    // Block until the backend is accepting connections before returning.
+    // This ensures backend_port() is only callable once the server is ready.
+    let ready = wait_for_port(port, std::time::Duration::from_secs(15));
+    if !ready {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::TimedOut,
+            format!("backend did not start on port {port} within 15s"),
+        ));
+    }
+
     Ok(SidecarHandle { process, port })
+}
+
+pub fn wait_for_port(port: u16, timeout: std::time::Duration) -> bool {
+    use std::net::TcpStream;
+    let deadline = std::time::Instant::now() + timeout;
+    while std::time::Instant::now() < deadline {
+        if TcpStream::connect(format!("127.0.0.1:{port}")).is_ok() {
+            return true;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+    false
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::net::TcpStream;
-    use std::time::{Duration, Instant};
+    use std::time::Duration;
 
     fn backend_dir() -> String {
         std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -48,17 +70,6 @@ mod tests {
             .to_str()
             .unwrap()
             .to_owned()
-    }
-
-    fn wait_for_port(port: u16, timeout: Duration) -> bool {
-        let deadline = Instant::now() + timeout;
-        while Instant::now() < deadline {
-            if TcpStream::connect(format!("127.0.0.1:{port}")).is_ok() {
-                return true;
-            }
-            std::thread::sleep(Duration::from_millis(100));
-        }
-        false
     }
 
     #[test]
