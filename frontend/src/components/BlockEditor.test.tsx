@@ -10,10 +10,22 @@ vi.mock("@tiptap/react", () => ({
     capturedOnUpdate = options?.onUpdate;
     return {
       getJSON: () => ({ type: "doc" as const, content: [] }),
-      commands: { setContent: vi.fn() },
+      commands: {
+        setContent: vi.fn(),
+        setParagraph: vi.fn(),
+        toggleHeading: vi.fn(),
+        toggleBold: vi.fn(),
+        toggleItalic: vi.fn(),
+        toggleBulletList: vi.fn(),
+        toggleOrderedList: vi.fn(),
+      },
+      isActive: vi.fn(() => false),
     };
   }),
   EditorContent: () => <div data-testid="editor-content" />,
+  useEditorState: vi.fn(({ selector, editor }: { selector: (ctx: { editor: unknown }) => unknown; editor: unknown }) =>
+    selector({ editor })
+  ),
 }));
 
 vi.mock("@tiptap/starter-kit", () => ({ default: {} }));

@@ -3,6 +3,7 @@ import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { useAppStore } from "../store";
 import type { TipTapDoc } from "../types/editor";
+import EditorRibbon from "./EditorRibbon";
 
 const AUTOSAVE_DEBOUNCE_MS = 1000;
 
@@ -48,8 +49,11 @@ export default function BlockEditor({ projectId }: Props) {
   }, []);
 
   return (
-    <div className="h-full overflow-y-auto px-8 py-6 prose prose-neutral max-w-3xl mx-auto">
-      <EditorContent editor={editor} />
+    <div className="h-full flex flex-col">
+      <EditorRibbon editor={editor} />
+      <div className="flex-1 overflow-y-auto px-8 py-6 prose prose-neutral max-w-3xl mx-auto">
+        <EditorContent editor={editor} />
+      </div>
     </div>
   );
 }

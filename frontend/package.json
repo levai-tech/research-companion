@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@radix-ui/react-slot": "^1.2.4",
+    "@tailwindcss/typography": "^0.5.19",
     "@tauri-apps/api": "^2",
     "@tiptap/pm": "^3.22.5",
     "@tiptap/react": "^3.22.5",
