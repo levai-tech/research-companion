@@ -3,13 +3,15 @@ import socket
 from pathlib import Path
 
 import uvicorn
-from fastapi import FastAPI, Response
+from fastapi import BackgroundTasks, FastAPI, File, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
 import httpx
 from fastapi import HTTPException
 from backend import interview, approach_explorer, outline_generator
+from backend.ingestion import IngestionService
 from backend.projects import ProjectService
+from backend.resource_store import ResourceStore
 from backend.settings import Settings
 
 _DEFAULT_BASE_DIR = Path.home() / ".research-companion"
@@ -39,7 +41,10 @@ def create_app(settings_path: Path | None = None, projects_dir: Path | None = No
         allow_headers=["*"],
     )
     settings = Settings(path=settings_path)
-    project_service = ProjectService(base_dir=projects_dir or _DEFAULT_BASE_DIR)
+    base_dir = projects_dir or _DEFAULT_BASE_DIR
+    project_service = ProjectService(base_dir=base_dir)
+    resource_store = ResourceStore(base_dir=base_dir)
+    ingestion_service = IngestionService(store=resource_store)
 
     @app.get("/health")
     async def health():
@@ -174,6 +179,58 @@ def create_app(settings_path: Path | None = None, projects_dir: Path | None = No
         if transcript is None:
             raise HTTPException(status_code=404, detail="Transcript not found")
         return transcript.to_dict()
+
+    @app.post("/projects/{project_id}/resources/file", status_code=202)
+    async def post_resource_file(
+        project_id: str,
+        background_tasks: BackgroundTasks,
+        resource_type: str = "Book",
+        file: UploadFile = File(...),
+    ):
+        if project_service.get(project_id) is None:
+            raise HTTPException(status_code=404, detail="Project not found")
+        content = await file.read()
+        result = ingestion_service.accept_file(
+            project_id=project_id,
+            content=content,
+            resource_type=resource_type,
+        )
+        if result["indexing_status"] == "queued":
+            background_tasks.add_task(
+                ingestion_service.run_file_pipeline,
+                result["resource_id"],
+                file.filename or "upload",
+            )
+        return result
+
+    @app.post("/projects/{project_id}/resources/url", status_code=202)
+    async def post_resource_url(
+        project_id: str,
+        body: dict,
+        background_tasks: BackgroundTasks,
+    ):
+        if project_service.get(project_id) is None:
+            raise HTTPException(status_code=404, detail="Project not found")
+        url = body.get("url", "").strip()
+        if not url:
+            raise HTTPException(status_code=422, detail="url is required")
+        result = ingestion_service.accept_url(project_id=project_id, url=url)
+        if result["indexing_status"] == "queued":
+            background_tasks.add_task(
+                ingestion_service.run_url_pipeline,
+                result["resource_id"],
+                url,
+            )
+        return result
+
+    @app.get("/projects/{project_id}/resources/{resource_id}/status")
+    async def get_resource_status(project_id: str, resource_id: str):
+        if project_service.get(project_id) is None:
+            raise HTTPException(status_code=404, detail="Project not found")
+        status = ingestion_service.get_status(resource_id)
+        if status is None:
+            raise HTTPException(status_code=404, detail="Resource not found")
+        return status
 
     @app.post("/interview")
     async def post_interview(body: dict):

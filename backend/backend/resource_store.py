@@ -18,6 +18,11 @@ class Resource:
     indexing_status: str
     citation_metadata: dict
     created_at: str
+    chunker_id: str | None = None
+    embedder_id: str | None = None
+    chunks_done: int = 0
+    chunks_total: int = 0
+    error_message: str | None = None
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -30,9 +35,22 @@ CREATE TABLE IF NOT EXISTS resources (
     resource_type     TEXT NOT NULL,
     indexing_status   TEXT NOT NULL DEFAULT 'queued',
     citation_metadata TEXT NOT NULL DEFAULT '{}',
-    created_at        TEXT NOT NULL
+    created_at        TEXT NOT NULL,
+    chunker_id        TEXT,
+    embedder_id       TEXT,
+    chunks_done       INTEGER NOT NULL DEFAULT 0,
+    chunks_total      INTEGER NOT NULL DEFAULT 0,
+    error_message     TEXT
 )
 """
+
+_MIGRATIONS = [
+    "ALTER TABLE resources ADD COLUMN chunker_id TEXT",
+    "ALTER TABLE resources ADD COLUMN embedder_id TEXT",
+    "ALTER TABLE resources ADD COLUMN chunks_done INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE resources ADD COLUMN chunks_total INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE resources ADD COLUMN error_message TEXT",
+]
 
 _CREATE_CHUNKS = """
 CREATE TABLE IF NOT EXISTS chunks (
@@ -80,6 +98,11 @@ class ResourceStore:
         con.execute(_CREATE_RESOURCES)
         con.execute(_CREATE_CHUNKS)
         con.execute(_CREATE_EMBEDDINGS)
+        for stmt in _MIGRATIONS:
+            try:
+                con.execute(stmt)
+            except sqlite3.OperationalError:
+                pass  # column already exists
         con.commit()
         con.close()
 
@@ -90,6 +113,24 @@ class ResourceStore:
         con.execute(_CREATE_PROJECT_RESOURCES)
         return con
 
+    def _row_to_resource(self, row: tuple) -> Resource:
+        return Resource(
+            id=row[0], content_hash=row[1], resource_type=row[2],
+            indexing_status=row[3], citation_metadata=json.loads(row[4]),
+            created_at=row[5], chunker_id=row[6], embedder_id=row[7],
+            chunks_done=row[8] or 0, chunks_total=row[9] or 0,
+            error_message=row[10],
+        )
+
+    def _select_resource(self, con: sqlite3.Connection, where: str, params: tuple) -> Resource | None:
+        row = con.execute(
+            "SELECT id, content_hash, resource_type, indexing_status, citation_metadata,"
+            " created_at, chunker_id, embedder_id, chunks_done, chunks_total, error_message"
+            f" FROM resources WHERE {where}",
+            params,
+        ).fetchone()
+        return self._row_to_resource(row) if row else None
+
     def get_or_create(
         self,
         content_hash: str,
@@ -97,18 +138,10 @@ class ResourceStore:
         citation_metadata: dict | None = None,
     ) -> Resource:
         con = self._connect()
-        row = con.execute(
-            "SELECT id, content_hash, resource_type, indexing_status, citation_metadata, created_at"
-            " FROM resources WHERE content_hash = ?",
-            (content_hash,),
-        ).fetchone()
-        if row:
+        existing = self._select_resource(con, "content_hash = ?", (content_hash,))
+        if existing:
             con.close()
-            return Resource(
-                id=row[0], content_hash=row[1], resource_type=row[2],
-                indexing_status=row[3], citation_metadata=json.loads(row[4]),
-                created_at=row[5],
-            )
+            return existing
 
         resource_id = str(uuid.uuid4())
         created_at = datetime.now(timezone.utc).isoformat()
@@ -125,6 +158,65 @@ class ResourceStore:
             indexing_status="queued", citation_metadata=citation_metadata or {},
             created_at=created_at,
         )
+
+    def update_status(
+        self,
+        resource_id: str,
+        status: str,
+        chunker_id: str | None = None,
+        embedder_id: str | None = None,
+        chunks_done: int = 0,
+        chunks_total: int = 0,
+        error_message: str | None = None,
+    ) -> None:
+        con = self._connect()
+        con.execute(
+            "UPDATE resources SET indexing_status=?, chunker_id=?, embedder_id=?,"
+            " chunks_done=?, chunks_total=?, error_message=? WHERE id=?",
+            (status, chunker_id, embedder_id, chunks_done, chunks_total, error_message, resource_id),
+        )
+        con.commit()
+        con.close()
+
+    def get_status(self, resource_id: str) -> dict | None:
+        con = self._connect()
+        resource = self._select_resource(con, "id = ?", (resource_id,))
+        con.close()
+        if resource is None:
+            return None
+        return {
+            "indexing_status": resource.indexing_status,
+            "chunks_done": resource.chunks_done,
+            "chunks_total": resource.chunks_total,
+            "error_message": resource.error_message,
+        }
+
+    def store_chunks_and_embeddings(
+        self,
+        resource_id: str,
+        chunks: list[str],
+        embeddings: list[list[float]],
+        chunker_id: str,
+        embedder_id: str,
+    ) -> None:
+        con = self._connect()
+        for i, (text, vector) in enumerate(zip(chunks, embeddings)):
+            chunk_id = str(uuid.uuid4())
+            con.execute(
+                "INSERT INTO chunks (id, resource_id, text, position) VALUES (?, ?, ?, ?)",
+                (chunk_id, resource_id, text, i),
+            )
+            con.execute(
+                "INSERT INTO embeddings (chunk_id, embedding) VALUES (?, ?)",
+                (chunk_id, json.dumps(vector)),
+            )
+        con.execute(
+            "UPDATE resources SET indexing_status='ready', chunker_id=?, embedder_id=?,"
+            " chunks_done=?, chunks_total=? WHERE id=?",
+            (chunker_id, embedder_id, len(chunks), len(chunks), resource_id),
+        )
+        con.commit()
+        con.close()
 
     def attach(self, project_id: str, resource_id: str) -> None:
         added_at = datetime.now(timezone.utc).isoformat()
