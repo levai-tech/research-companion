@@ -215,6 +215,14 @@ class ResourceStore:
         embedder_id: str,
     ) -> None:
         con = self._connect()
+        existing_chunk_ids = [
+            r[0] for r in con.execute(
+                "SELECT id FROM chunks WHERE resource_id = ?", (resource_id,)
+            ).fetchall()
+        ]
+        for cid in existing_chunk_ids:
+            con.execute("DELETE FROM embeddings WHERE chunk_id = ?", (cid,))
+        con.execute("DELETE FROM chunks WHERE resource_id = ?", (resource_id,))
         for i, (text, vector) in enumerate(zip(chunks, embeddings)):
             chunk_id = str(uuid.uuid4())
             con.execute(
@@ -270,6 +278,60 @@ class ResourceStore:
             )
             for r in rows
         ]
+
+    def search(
+        self,
+        project_id: str,
+        query_embedding: list[float],
+        top_k: int = 10,
+    ) -> list[dict]:
+        proj_con = self._project_con(project_id)
+        resource_ids = [
+            r[0] for r in proj_con.execute(
+                "SELECT resource_id FROM project_resources WHERE project_id = ?",
+                (project_id,),
+            ).fetchall()
+        ]
+        proj_con.close()
+        if not resource_ids:
+            return []
+
+        con = self._connect()
+        placeholders = ",".join("?" * len(resource_ids))
+        ready_ids = {
+            r[0] for r in con.execute(
+                f"SELECT id FROM resources WHERE id IN ({placeholders}) AND indexing_status = 'ready'",
+                resource_ids,
+            ).fetchall()
+        }
+        if not ready_ids:
+            con.close()
+            return []
+
+        knn_rows = con.execute(
+            "SELECT chunk_id, distance FROM embeddings WHERE embedding MATCH ? AND k = ?",
+            (json.dumps(query_embedding), top_k * max(len(ready_ids), 5)),
+        ).fetchall()
+
+        results = []
+        for chunk_id, distance in knn_rows:
+            if len(results) >= top_k:
+                break
+            chunk_row = con.execute(
+                "SELECT text, resource_id FROM chunks WHERE id = ?", (chunk_id,)
+            ).fetchone()
+            if chunk_row is None or chunk_row[1] not in ready_ids:
+                continue
+            resource = self._select_resource(con, "id = ?", (chunk_row[1],))
+            results.append({
+                "chunk_text": chunk_row[0],
+                "score": round(max(0.0, 1.0 - float(distance)), 4),
+                "resource_type": resource.resource_type if resource else "",
+                "citation_metadata": resource.citation_metadata if resource else {},
+            })
+
+        con.close()
+        return results
 
     def detach(self, project_id: str, resource_id: str) -> None:
         proj_con = self._project_con(project_id)

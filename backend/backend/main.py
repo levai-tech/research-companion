@@ -51,7 +51,7 @@ def _llm_error(e: httpx.HTTPStatusError) -> HTTPException:
     return HTTPException(status_code=e.response.status_code, detail=openrouter_msg)
 
 
-def create_app(settings_path: Path | None = None, projects_dir: Path | None = None) -> FastAPI:
+def create_app(settings_path: Path | None = None, projects_dir: Path | None = None, embedder=None) -> FastAPI:
     app = FastAPI()
     app.add_middleware(
         CORSMiddleware,
@@ -63,7 +63,7 @@ def create_app(settings_path: Path | None = None, projects_dir: Path | None = No
     base_dir = projects_dir or _DEFAULT_BASE_DIR
     project_service = ProjectService(base_dir=base_dir)
     resource_store = ResourceStore(base_dir=base_dir)
-    ingestion_service = IngestionService(store=resource_store)
+    ingestion_service = IngestionService(store=resource_store, embedder=embedder)
     _spawn_ctx = multiprocessing.get_context("spawn")
 
     @app.get("/health")
@@ -268,6 +268,14 @@ def create_app(settings_path: Path | None = None, projects_dir: Path | None = No
         if status is None:
             raise HTTPException(status_code=404, detail="Resource not found")
         return status
+
+    @app.get("/projects/{project_id}/resources/search")
+    async def search_resources(project_id: str, q: str, top_k: int = 10):
+        if project_service.get(project_id) is None:
+            raise HTTPException(status_code=404, detail="Project not found")
+        query_embedding = ingestion_service.embedder.embed([q])[0]
+        results = resource_store.search(project_id, query_embedding, top_k)
+        return {"results": results}
 
     @app.get("/projects/{project_id}/resources")
     async def list_resources(project_id: str):

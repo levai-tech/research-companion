@@ -31,6 +31,10 @@ class IngestionService:
         self._chunker: Chunker = chunker or RecursiveChunker()
         self._embedder: Embedder = embedder or FastEmbedEmbedder()
 
+    @property
+    def embedder(self) -> Embedder:
+        return self._embedder
+
     def accept_file(
         self,
         project_id: str,

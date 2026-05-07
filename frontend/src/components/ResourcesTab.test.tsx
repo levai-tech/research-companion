@@ -150,3 +150,154 @@ describe("ResourcesTab — delete resource", () => {
     expect(screen.queryByText("The Art of War")).not.toBeInTheDocument();
   });
 });
+
+// ── Behavior 6: search bar renders ───────────────────────────────────────────
+
+it("renders a search input and submit button", async () => {
+  global.fetch = mockList([]);
+
+  render(<ResourcesTab projectId="proj-1" />);
+
+  await screen.findByRole("button", { name: /add resource/i });
+
+  expect(screen.getByPlaceholderText(/search resources/i)).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: /^search$/i })).toBeInTheDocument();
+});
+
+// ── Behavior 7: submitting search calls the API ───────────────────────────────
+
+it("submitting the search form calls the search endpoint with the query", async () => {
+  global.fetch = vi.fn()
+    .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve([]) } as Response)
+    .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ results: [] }) } as Response);
+
+  render(<ResourcesTab projectId="proj-1" />);
+
+  await screen.findByRole("button", { name: /add resource/i });
+  await userEvent.type(screen.getByPlaceholderText(/search resources/i), "quantum");
+  await userEvent.click(screen.getByRole("button", { name: /^search$/i }));
+
+  expect(global.fetch).toHaveBeenCalledWith(
+    expect.stringContaining("/projects/proj-1/resources/search?q=quantum"),
+  );
+});
+
+// ── Behavior 8: results show chunk excerpt, title, type, and score ────────────
+
+it("displays chunk excerpt, resource title, type, and score for each result", async () => {
+  const result = {
+    chunk_text: "Quantum entanglement is a phenomenon where particles become correlated.",
+    score: 0.87,
+    resource_type: "Book",
+    citation_metadata: { title: "Quantum Physics" },
+  };
+
+  global.fetch = vi.fn()
+    .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve([]) } as Response)
+    .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ results: [result] }) } as Response);
+
+  render(<ResourcesTab projectId="proj-1" />);
+
+  await screen.findByRole("button", { name: /add resource/i });
+  await userEvent.type(screen.getByPlaceholderText(/search resources/i), "quantum");
+  await userEvent.click(screen.getByRole("button", { name: /^search$/i }));
+
+  await screen.findByText(result.chunk_text);
+  expect(screen.getByText(/Quantum Physics/)).toBeInTheDocument();
+  expect(screen.getByText(/Book/)).toBeInTheDocument();
+  expect(screen.getByText(/0\.87/)).toBeInTheDocument();
+});
+
+// ── Behavior 9: no search on keystroke ───────────────────────────────────────
+
+it("does not call the search API on every keystroke", async () => {
+  global.fetch = mockList([]);
+
+  render(<ResourcesTab projectId="proj-1" />);
+
+  await screen.findByRole("button", { name: /add resource/i });
+  const callsBefore = (global.fetch as ReturnType<typeof vi.fn>).mock.calls.length;
+
+  await userEvent.type(screen.getByPlaceholderText(/search resources/i), "quantum physics");
+
+  expect((global.fetch as ReturnType<typeof vi.fn>).mock.calls.length).toBe(callsBefore);
+});
+
+// ── Behavior 10: empty state when search returns no results ───────────────────
+
+it("shows 'No results found' when search returns an empty list", async () => {
+  global.fetch = vi.fn()
+    .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve([]) } as Response)
+    .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ results: [] }) } as Response);
+
+  render(<ResourcesTab projectId="proj-1" />);
+
+  await screen.findByRole("button", { name: /add resource/i });
+  await userEvent.type(screen.getByPlaceholderText(/search resources/i), "nothing");
+  await userEvent.click(screen.getByRole("button", { name: /^search$/i }));
+
+  await screen.findByText(/no results found/i);
+});
+
+const LONG_CHUNK = "QuantumPhysics".repeat(30); // 420 chars, no spaces
+const LONG_CHUNK_RESULT = {
+  chunk_text: LONG_CHUNK,
+  score: 0.9,
+  resource_type: "Book",
+  citation_metadata: { title: "Big Book" },
+};
+
+function mockSearch(results = [LONG_CHUNK_RESULT]) {
+  return vi.fn()
+    .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve([]) } as Response)
+    .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ results }) } as Response);
+}
+
+async function renderAndSearch(projectId = "proj-1") {
+  render(<ResourcesTab projectId={projectId} />);
+  await screen.findByRole("button", { name: /add resource/i });
+  await userEvent.type(screen.getByPlaceholderText(/search resources/i), "quantum");
+  await userEvent.click(screen.getByRole("button", { name: /^search$/i }));
+}
+
+// ── Behavior 11: long chunk is truncated by default ───────────────────────────
+
+it("shows a truncated preview of a long chunk by default", async () => {
+  global.fetch = mockSearch();
+
+  await renderAndSearch();
+
+  const preview = await screen.findByText(/^QuantumPhysics/);
+  expect(preview.textContent).toMatch(/…$/);
+  expect(screen.queryByText(LONG_CHUNK, { normalizer: (s) => s })).not.toBeInTheDocument();
+});
+
+// ── Behavior 12: clicking the result card reveals the full chunk ──────────────
+
+it("clicking a result card reveals the full chunk text", async () => {
+  global.fetch = mockSearch();
+
+  await renderAndSearch();
+
+  const preview = await screen.findByText(/^QuantumPhysics/);
+  await userEvent.click(preview.closest("li")!);
+
+  await screen.findByText(LONG_CHUNK, { normalizer: (s) => s });
+});
+
+// ── Behavior 13: clicking the expanded card collapses it back ─────────────────
+
+it("clicking an expanded result card collapses back to preview", async () => {
+  global.fetch = mockSearch();
+
+  await renderAndSearch();
+
+  const preview = await screen.findByText(/^QuantumPhysics/);
+  await userEvent.click(preview.closest("li")!);
+
+  const fullEl = await screen.findByText(LONG_CHUNK, { normalizer: (s) => s });
+  await userEvent.click(fullEl.closest("li")!);
+
+  const collapsed = await screen.findByText(/^QuantumPhysics/);
+  expect(collapsed.textContent).toMatch(/…$/);
+});
