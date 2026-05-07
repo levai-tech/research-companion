@@ -23,7 +23,7 @@ def settings(tmp_settings_path):
 def test_get_returns_defaults_when_file_absent(settings):
     result = settings.get()
     default_model = "mistralai/mistral-7b-instruct:free"
-    for role in ["angle_explorer", "research_agent", "literature_review", "editor_ai", "outline_generator"]:
+    for role in ["approach_explorer", "research_agent", "literature_review", "editor_ai", "outline_generator"]:
         assert result["roles"][role]["model"] == default_model, f"{role} missing default model"
     assert result["search_provider"] == "tavily"
     assert result["ollama"]["endpoint"] == "http://localhost:11434"
@@ -39,7 +39,7 @@ def test_update_persists_role_model(settings, tmp_settings_path):
 def test_update_merges_not_replaces(settings):
     settings.update({"roles": {"research_agent": {"model": "google/gemini-2.5-flash"}}})
     result = settings.get()
-    assert result["roles"]["angle_explorer"]["model"] == "mistralai/mistral-7b-instruct:free"
+    assert result["roles"]["approach_explorer"]["model"] == "mistralai/mistral-7b-instruct:free"
     assert result["roles"]["research_agent"]["model"] == "google/gemini-2.5-flash"
 
 
@@ -98,7 +98,7 @@ async def test_get_settings_returns_defaults(app):
         response = await client.get("/settings")
     assert response.status_code == 200
     body = response.json()
-    assert body["roles"]["angle_explorer"]["model"] == "mistralai/mistral-7b-instruct:free"
+    assert body["roles"]["approach_explorer"]["model"] == "mistralai/mistral-7b-instruct:free"
     assert body["search_provider"] == "tavily"
     assert body["ollama"]["embedding_model"] == "nomic-embed-text"
 
@@ -110,7 +110,7 @@ async def test_put_settings_updates_role_model(app):
         assert put_resp.status_code == 200
         body = (await client.get("/settings")).json()
     assert body["roles"]["editor_ai"]["model"] == "anthropic/claude-sonnet-4.6"
-    assert body["roles"]["angle_explorer"]["model"] == "mistralai/mistral-7b-instruct:free"
+    assert body["roles"]["approach_explorer"]["model"] == "mistralai/mistral-7b-instruct:free"
 
 
 async def test_get_keys_mask_returns_booleans(app):

@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 import httpx
 from fastapi import HTTPException
-from backend import interview, angle_explorer, outline_generator
+from backend import interview, approach_explorer, outline_generator
 from backend.projects import ProjectService
 from backend.settings import Settings
 
@@ -83,9 +83,8 @@ def create_app(settings_path: Path | None = None, projects_dir: Path | None = No
         if project_service.get(project_id) is None:
             raise HTTPException(status_code=404, detail="Project not found")
         try:
-            approaches = await angle_explorer.call_llm(
-                body["topic"],
-                body["document_type"],
+            approaches = await approach_explorer.call_llm(
+                body["transcript_summary"],
                 role="approach_explorer",
             )
         except httpx.HTTPStatusError as e:

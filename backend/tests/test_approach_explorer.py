@@ -34,11 +34,11 @@ async def test_propose_returns_approaches_with_title_and_description(app):
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
         project_id = await _create_project(client)
 
-        with patch("backend.angle_explorer.call_llm", new_callable=AsyncMock) as mock_llm:
+        with patch("backend.approach_explorer.call_llm", new_callable=AsyncMock) as mock_llm:
             mock_llm.return_value = _MOCK_APPROACHES
             response = await client.post(
                 f"/projects/{project_id}/approaches/propose",
-                json={"topic": "Quantum computing", "document_type": "book"},
+                json={"transcript_summary": "Quantum computing threatens RSA encryption."},
             )
 
     assert response.status_code == 200
@@ -55,13 +55,13 @@ async def test_propose_routes_via_approach_explorer_role(app):
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
         project_id = await _create_project(client)
 
-        with patch("backend.angle_explorer.call_llm", new_callable=AsyncMock) as mock_llm:
+        with patch("backend.approach_explorer.call_llm", new_callable=AsyncMock) as mock_llm:
             mock_llm.return_value = _MOCK_APPROACHES
             await client.post(
                 f"/projects/{project_id}/approaches/propose",
-                json={"topic": "Quantum computing", "document_type": "book"},
+                json={"transcript_summary": "Quantum computing threatens RSA encryption."},
             )
 
     mock_llm.assert_awaited_once()
     _, kwargs = mock_llm.call_args
-    assert kwargs.get("role") == "approach_explorer" or mock_llm.call_args.args[2:] == ("approach_explorer",)
+    assert kwargs.get("role") == "approach_explorer" or mock_llm.call_args.args[1:] == ("approach_explorer",)

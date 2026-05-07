@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 
 const ROLES: { key: string; label: string }[] = [
   { key: "project_advisor", label: "Project Advisor" },
-  { key: "angle_explorer", label: "Angle Explorer" },
+  { key: "approach_explorer", label: "Approach Explorer" },
   { key: "research_agent", label: "Research Agent" },
   { key: "literature_review", label: "Literature Review Synthesizer" },
   { key: "editor_ai", label: "Editor AI" },

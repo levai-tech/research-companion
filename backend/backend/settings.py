@@ -10,7 +10,7 @@ _KEYCHAIN_SERVICE = "research-companion"
 _DEFAULTS: dict = {
     "roles": {
         "project_advisor": {"model": "mistralai/mistral-7b-instruct:free"},
-        "angle_explorer": {"model": "mistralai/mistral-7b-instruct:free"},
+        "approach_explorer": {"model": "mistralai/mistral-7b-instruct:free"},
         "research_agent": {"model": "mistralai/mistral-7b-instruct:free"},
         "literature_review": {"model": "mistralai/mistral-7b-instruct:free"},
         "editor_ai": {"model": "mistralai/mistral-7b-instruct:free"},

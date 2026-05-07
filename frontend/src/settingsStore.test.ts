@@ -11,7 +11,7 @@ beforeEach(() => {
 
 const mockSettings = {
   roles: {
-    angle_explorer: { model: "mistralai/mistral-7b-instruct:free" },
+    approach_explorer: { model: "mistralai/mistral-7b-instruct:free" },
     research_agent: { model: "mistralai/mistral-7b-instruct:free" },
     literature_review: { model: "mistralai/mistral-7b-instruct:free" },
     editor_ai: { model: "mistralai/mistral-7b-instruct:free" },
@@ -33,7 +33,7 @@ describe("useSettingsStore", () => {
 
     expect(global.fetch).toHaveBeenCalledWith("http://127.0.0.1:8099/settings");
     expect(result.current.settings?.search_provider).toBe("tavily");
-    expect(result.current.settings?.roles.angle_explorer.model).toBe("mistralai/mistral-7b-instruct:free");
+    expect(result.current.settings?.roles.approach_explorer.model).toBe("mistralai/mistral-7b-instruct:free");
   });
 
   it("updateRoleModel PUTs to backend and updates local state", async () => {

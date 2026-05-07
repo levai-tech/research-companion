@@ -1,6 +1,6 @@
 _DEFAULTS: dict[str, str] = {
     "project_advisor": "mistralai/mistral-7b-instruct:free",
-    "angle_explorer": "mistralai/mistral-7b-instruct:free",
+    "approach_explorer": "mistralai/mistral-7b-instruct:free",
     "research_agent": "mistralai/mistral-7b-instruct:free",
     "literature_review": "mistralai/mistral-7b-instruct:free",
     "editor_ai": "mistralai/mistral-7b-instruct:free",

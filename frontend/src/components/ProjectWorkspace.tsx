@@ -1,15 +1,18 @@
 import { useEffect, useState } from "react";
 import { useAppStore } from "../store";
 import type { Project } from "../hooks/useProjects";
-import AngleExplorer from "./AngleExplorer";
+import ApproachExplorer from "./ApproachExplorer";
 import OutlineGenerator from "./OutlineGenerator";
 import BlockEditor from "./BlockEditor";
 
-interface Angle {
+interface Approach {
   id: string;
   title: string;
   description: string;
-  status: string;
+}
+
+interface Transcript {
+  summary: string;
 }
 
 interface OutlineSection {
@@ -23,7 +26,7 @@ interface Outline {
   sections: OutlineSection[];
 }
 
-type Tab = "angles" | "outline" | "editor";
+type Tab = "approach" | "outline" | "editor";
 
 interface Props {
   project: Project;
@@ -32,29 +35,32 @@ interface Props {
 
 export default function ProjectWorkspace({ project, onBack }: Props) {
   const port = useAppStore((s) => s.backendPort);
-  const [angles, setAngles] = useState<Angle[] | null>(null);
+  const [approach, setApproach] = useState<Approach | null>(null);
+  const [transcript, setTranscript] = useState<Transcript | null>(null);
   const [outline, setOutline] = useState<Outline | null>(null);
-  const [tab, setTab] = useState<Tab>("angles");
+  const [tab, setTab] = useState<Tab>("approach");
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     if (!port) return;
     Promise.all([
-      fetch(`http://127.0.0.1:${port}/projects/${project.id}/angles`).then((r) => r.json()),
+      fetch(`http://127.0.0.1:${port}/projects/${project.id}/approach`).then((r) => r.json()),
+      fetch(`http://127.0.0.1:${port}/projects/${project.id}/transcript`).then((r) => r.status === 404 ? null : r.json()),
       fetch(`http://127.0.0.1:${port}/projects/${project.id}/outline`).then((r) => r.json()),
-    ]).then(([anglesData, outlineData]: [Angle[], Outline]) => {
-      setAngles(anglesData);
+    ]).then(([approachData, transcriptData, outlineData]: [Approach | null, Transcript | null, Outline]) => {
+      setApproach(approachData);
+      setTranscript(transcriptData);
       setOutline(outlineData);
-      if (anglesData.length > 0) setTab("outline");
+      if (approachData) setTab("outline");
     }).finally(() => setIsLoading(false));
   }, [port, project.id]);
 
-  function refetchAngles() {
+  function refetchApproach() {
     if (!port) return;
-    fetch(`http://127.0.0.1:${port}/projects/${project.id}/angles`)
+    fetch(`http://127.0.0.1:${port}/projects/${project.id}/approach`)
       .then((r) => r.json())
-      .then((data: Angle[]) => {
-        setAngles(data);
+      .then((data: Approach) => {
+        setApproach(data);
         setTab("outline");
       });
   }
@@ -86,7 +92,7 @@ export default function ProjectWorkspace({ project, onBack }: Props) {
 
       {/* Tab nav */}
       <div className="flex gap-1 border-b px-6 pt-2">
-        {(["angles", "outline", "editor"] as Tab[]).map((t) => (
+        {(["approach", "outline", "editor"] as Tab[]).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -97,8 +103,8 @@ export default function ProjectWorkspace({ project, onBack }: Props) {
             }`}
           >
             {t}
-            {t === "angles" && angles && angles.length > 0 && (
-              <span className="ml-1.5 rounded-full bg-primary/10 px-1.5 py-0.5 text-xs">{angles.length}</span>
+            {t === "approach" && approach && (
+              <span className="ml-1.5 text-xs text-green-600">✓</span>
             )}
             {t === "outline" && outline?.structure && (
               <span className="ml-1.5 text-xs text-green-600">✓</span>
@@ -109,22 +115,19 @@ export default function ProjectWorkspace({ project, onBack }: Props) {
 
       {/* Tab content */}
       <div className="flex-1 overflow-y-auto">
-        {tab === "angles" && (
-          angles && angles.length > 0 ? (
+        {tab === "approach" && (
+          approach ? (
             <div className="p-6 flex flex-col gap-3">
-              {angles.map((a) => (
-                <div key={a.id} className="rounded border p-4">
-                  <p className="font-semibold">{a.title}</p>
-                  <p className="text-sm text-muted-foreground">{a.description}</p>
-                </div>
-              ))}
+              <div className="rounded border p-4">
+                <p className="font-semibold">{approach.title}</p>
+                <p className="text-sm text-muted-foreground">{approach.description}</p>
+              </div>
             </div>
           ) : (
-            <AngleExplorer
+            <ApproachExplorer
               projectId={project.id}
-              topic={project.topic}
-              documentType={project.document_type}
-              onComplete={refetchAngles}
+              transcriptSummary={transcript?.summary ?? project.topic}
+              onComplete={refetchApproach}
             />
           )
         )}
@@ -162,14 +165,14 @@ export default function ProjectWorkspace({ project, onBack }: Props) {
               </ol>
             </div>
           ) : (
-            angles && angles.length > 0 ? (
+            approach ? (
               <OutlineGenerator
                 projectId={project.id}
                 onComplete={refetchOutline}
               />
             ) : (
               <div className="p-6 text-sm text-muted-foreground">
-                Set up your research angles first — switch to the Angles tab.
+                Confirm your Approach first — switch to the Approach tab.
               </div>
             )
           )
