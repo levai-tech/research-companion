@@ -21,7 +21,7 @@ export default function App() {
         </button>
       </header>
 
-      <main className="flex-1 min-h-0 overflow-hidden">
+      <main className="flex-1 min-h-0 overflow-y-auto">
         {showSettings ? (
           <SettingsPage onClose={() => setShowSettings(false)} />
         ) : (
