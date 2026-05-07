@@ -17,7 +17,10 @@ class FastEmbedEmbedder:
     def _get_model(self):
         if self._model is None:
             from fastembed import TextEmbedding
-            FastEmbedEmbedder._model = TextEmbedding("BAAI/bge-small-en-v1.5")
+            FastEmbedEmbedder._model = TextEmbedding(
+                "BAAI/bge-small-en-v1.5",
+                providers=["CPUExecutionProvider"],
+            )
         return self._model
 
     def embed(self, texts: list[str]) -> list[list[float]]:

@@ -60,6 +60,7 @@ pub fn wait_for_port(port: u16, timeout: std::time::Duration) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::net::TcpStream;
     use std::time::Duration;
 
     fn backend_dir() -> String {
@@ -70,6 +71,10 @@ mod tests {
             .to_str()
             .unwrap()
             .to_owned()
+    }
+
+    fn venv_python(backend_dir: &str) -> String {
+        format!("{}/.venv/bin/python3", backend_dir)
     }
 
     #[test]
@@ -88,7 +93,8 @@ mod tests {
     #[test]
     fn sidecar_starts_and_health_responds() {
         let dir = backend_dir();
-        let handle = start_backend("python3", &dir).expect("failed to start backend");
+        let python = venv_python(&dir);
+        let handle = start_backend(&python, &dir).expect("failed to start backend");
         let port = handle.port();
         assert!(
             wait_for_port(port, Duration::from_secs(5)),
@@ -99,7 +105,8 @@ mod tests {
     #[test]
     fn dropping_handle_kills_process() {
         let dir = backend_dir();
-        let handle = start_backend("python3", &dir).expect("failed to start backend");
+        let python = venv_python(&dir);
+        let handle = start_backend(&python, &dir).expect("failed to start backend");
         let port = handle.port();
         assert!(wait_for_port(port, Duration::from_secs(5)), "backend never started");
 

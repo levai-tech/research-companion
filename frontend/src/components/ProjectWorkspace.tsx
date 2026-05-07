@@ -4,6 +4,7 @@ import type { Project } from "../hooks/useProjects";
 import ApproachExplorer from "./ApproachExplorer";
 import OutlineGenerator from "./OutlineGenerator";
 import BlockEditor from "./BlockEditor";
+import ResourcesTab from "./ResourcesTab";
 import { outlineToDoc } from "../utils/outlineToDoc";
 
 interface Approach {
@@ -32,7 +33,7 @@ interface Outline {
   sections: OutlineSection[];
 }
 
-type Tab = "transcript" | "approach" | "outline" | "editor";
+type Tab = "transcript" | "approach" | "outline" | "editor" | "resources";
 
 interface Props {
   project: Project;
@@ -106,7 +107,7 @@ export default function ProjectWorkspace({ project, onBack }: Props) {
 
       {/* Tab nav */}
       <div className="flex gap-1 border-b px-6 pt-2">
-        {(["transcript", "approach", "outline", "editor"] as Tab[]).map((t) => (
+        {(["transcript", "approach", "outline", "editor", "resources"] as Tab[]).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -170,6 +171,10 @@ export default function ProjectWorkspace({ project, onBack }: Props) {
 
         {tab === "editor" && (
           <BlockEditor projectId={project.id} />
+        )}
+
+        {tab === "resources" && (
+          <ResourcesTab projectId={project.id} />
         )}
 
         {tab === "outline" && (

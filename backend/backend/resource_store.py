@@ -178,6 +178,12 @@ class ResourceStore:
         con.commit()
         con.close()
 
+    def get(self, resource_id: str) -> Resource | None:
+        con = self._connect()
+        resource = self._select_resource(con, "id = ?", (resource_id,))
+        con.close()
+        return resource
+
     def get_status(self, resource_id: str) -> dict | None:
         con = self._connect()
         resource = self._select_resource(con, "id = ?", (resource_id,))

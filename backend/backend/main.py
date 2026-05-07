@@ -1,9 +1,11 @@
 import argparse
+import json
+import multiprocessing
 import socket
 from pathlib import Path
 
 import uvicorn
-from fastapi import BackgroundTasks, FastAPI, File, Response, UploadFile
+from fastapi import BackgroundTasks, FastAPI, File, Form, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
 import httpx
@@ -15,6 +17,23 @@ from backend.resource_store import ResourceStore
 from backend.settings import Settings
 
 _DEFAULT_BASE_DIR = Path.home() / ".research-companion"
+
+
+# Top-level so multiprocessing.spawn can pickle them.
+def _worker_file_pipeline(base_dir: str, resource_id: str, filename: str) -> None:
+    from backend.resource_store import ResourceStore
+    from backend.ingestion import IngestionService
+    IngestionService(store=ResourceStore(base_dir=Path(base_dir))).run_file_pipeline(
+        resource_id, filename
+    )
+
+
+def _worker_url_pipeline(base_dir: str, resource_id: str, url: str) -> None:
+    from backend.resource_store import ResourceStore
+    from backend.ingestion import IngestionService
+    IngestionService(store=ResourceStore(base_dir=Path(base_dir))).run_url_pipeline(
+        resource_id, url
+    )
 
 
 def find_free_port() -> int:
@@ -45,6 +64,7 @@ def create_app(settings_path: Path | None = None, projects_dir: Path | None = No
     project_service = ProjectService(base_dir=base_dir)
     resource_store = ResourceStore(base_dir=base_dir)
     ingestion_service = IngestionService(store=resource_store)
+    _spawn_ctx = multiprocessing.get_context("spawn")
 
     @app.get("/health")
     async def health():
@@ -185,23 +205,32 @@ def create_app(settings_path: Path | None = None, projects_dir: Path | None = No
         project_id: str,
         background_tasks: BackgroundTasks,
         resource_type: str = "Book",
+        citation_metadata: str = Form(default="{}"),
         file: UploadFile = File(...),
     ):
         if project_service.get(project_id) is None:
             raise HTTPException(status_code=404, detail="Project not found")
+        try:
+            meta = json.loads(citation_metadata) if citation_metadata else {}
+        except json.JSONDecodeError:
+            meta = {}
         content = await file.read()
         result = ingestion_service.accept_file(
             project_id=project_id,
             content=content,
             resource_type=resource_type,
+            citation_metadata=meta or None,
         )
         if result["indexing_status"] == "queued":
             background_tasks.add_task(
-                ingestion_service.run_file_pipeline,
-                result["resource_id"],
-                file.filename or "upload",
+                _spawn_ctx.Process(
+                    target=_worker_file_pipeline,
+                    args=(str(base_dir), result["resource_id"], file.filename or "upload"),
+                    daemon=False,
+                ).start
             )
-        return result
+        resource = resource_store.get(result["resource_id"])
+        return resource.to_dict() if resource else result
 
     @app.post("/projects/{project_id}/resources/url", status_code=202)
     async def post_resource_url(
@@ -214,14 +243,22 @@ def create_app(settings_path: Path | None = None, projects_dir: Path | None = No
         url = body.get("url", "").strip()
         if not url:
             raise HTTPException(status_code=422, detail="url is required")
-        result = ingestion_service.accept_url(project_id=project_id, url=url)
+        meta = body.get("citation_metadata") or {}
+        result = ingestion_service.accept_url(
+            project_id=project_id,
+            url=url,
+            citation_metadata=meta or None,
+        )
         if result["indexing_status"] == "queued":
             background_tasks.add_task(
-                ingestion_service.run_url_pipeline,
-                result["resource_id"],
-                url,
+                _spawn_ctx.Process(
+                    target=_worker_url_pipeline,
+                    args=(str(base_dir), result["resource_id"], url),
+                    daemon=False,
+                ).start
             )
-        return result
+        resource = resource_store.get(result["resource_id"])
+        return resource.to_dict() if resource else result
 
     @app.get("/projects/{project_id}/resources/{resource_id}/status")
     async def get_resource_status(project_id: str, resource_id: str):
@@ -231,6 +268,23 @@ def create_app(settings_path: Path | None = None, projects_dir: Path | None = No
         if status is None:
             raise HTTPException(status_code=404, detail="Resource not found")
         return status
+
+    @app.get("/projects/{project_id}/resources")
+    async def list_resources(project_id: str):
+        if project_service.get(project_id) is None:
+            raise HTTPException(status_code=404, detail="Project not found")
+        resources = resource_store.list_for_project(project_id)
+        return [r.to_dict() for r in resources]
+
+    @app.delete("/projects/{project_id}/resources/{resource_id}")
+    async def delete_resource(project_id: str, resource_id: str):
+        if project_service.get(project_id) is None:
+            raise HTTPException(status_code=404, detail="Project not found")
+        attached = resource_store.list_for_project(project_id)
+        if not any(r.id == resource_id for r in attached):
+            raise HTTPException(status_code=404, detail="Resource not found")
+        resource_store.detach(project_id, resource_id)
+        return {"ok": True}
 
     @app.post("/interview")
     async def post_interview(body: dict):

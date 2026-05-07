@@ -27,7 +27,8 @@ pub fn run() {
                 .to_string_lossy()
                 .to_string();
 
-            let handle = sidecar::start_backend("python3", &backend_dir)
+            let python = format!("{}/.venv/bin/python3", backend_dir);
+            let handle = sidecar::start_backend(&python, &backend_dir)
                 .expect("failed to start Python backend");
 
             app.manage(BackendState(Mutex::new(Some(handle))));
