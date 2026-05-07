@@ -18,21 +18,6 @@ const CHAT_RESPONSE = {
   message: "What topic are you writing about?",
 };
 
-const SUGGEST_RESPONSE = {
-  phase: "suggest",
-  message: "Here are some layouts for your book.",
-  layouts: [
-    { id: "three-act", name: "Three-Act Structure", description: "Classic narrative arc." },
-    { id: "inverted-pyramid", name: "Inverted Pyramid", description: "Lead with conclusions." },
-  ],
-  project_metadata: {
-    topic: "Quantum computing",
-    theme: "Accessibility",
-    angle: "Security risks",
-    document_type: "book",
-  },
-};
-
 // ── Behavior 9: interview conversation ───────────────────────────────────────
 
 describe("Interview", () => {
@@ -67,48 +52,52 @@ describe("Interview", () => {
     await screen.findByText("Interesting! What angle?");
   });
 
-  // ── Behavior 10: layout picker ─────────────────────────────────────────────
-
-  it("shows layout options when AI enters suggest phase", async () => {
-    global.fetch = vi.fn()
-      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(CHAT_RESPONSE) } as Response)
-      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(SUGGEST_RESPONSE) } as Response);
-
-    render(<Interview onProjectCreated={vi.fn()} />);
-
-    await screen.findByText("What topic are you writing about?");
-    const input = screen.getByRole("textbox");
-    await userEvent.type(input, "Quantum computing for everyone");
-    await userEvent.click(screen.getByRole("button", { name: /send/i }));
-
-    await screen.findByText("Three-Act Structure");
-    expect(screen.getByText("Inverted Pyramid")).toBeInTheDocument();
-  });
-
-  it("calls POST /projects and fires onProjectCreated when user picks a layout", async () => {
+it("calls POST /projects and POST /transcript, then fires onProjectCreated when Done is clicked", async () => {
     const onProjectCreated = vi.fn();
 
     global.fetch = vi.fn()
       .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(CHAT_RESPONSE) } as Response)
-      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(SUGGEST_RESPONSE) } as Response)
       .mockResolvedValueOnce({
         ok: true,
-        json: () => Promise.resolve({ id: "new-uuid", title: "My Project", ...SUGGEST_RESPONSE.project_metadata, layout_id: "three-act", last_modified: "2026-05-06T12:00:00+00:00" }),
-      } as Response);
+        json: () => Promise.resolve({ id: "proj-99", title: "Quantum computing", topic: "Quantum computing", document_type: "book", last_modified: "2026-05-07T10:00:00+00:00" }),
+      } as Response)
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({}) } as Response);
 
     render(<Interview onProjectCreated={onProjectCreated} />);
 
     await screen.findByText("What topic are you writing about?");
-    await userEvent.type(screen.getByRole("textbox"), "Quantum computing for everyone");
-    await userEvent.click(screen.getByRole("button", { name: /send/i }));
-
-    await screen.findByText("Three-Act Structure");
-    await userEvent.click(screen.getByRole("button", { name: /three-act structure/i }));
+    await userEvent.click(screen.getByRole("button", { name: /done/i }));
 
     expect(global.fetch).toHaveBeenCalledWith(
       "http://127.0.0.1:8000/projects",
       expect.objectContaining({ method: "POST" }),
     );
     await vi.waitFor(() => expect(onProjectCreated).toHaveBeenCalledTimes(1));
+  });
+
+  // ── Behavior: Done is idempotent — double-click creates only one project ─────
+
+  it("clicking Done twice only creates one project", async () => {
+    const onProjectCreated = vi.fn();
+
+    global.fetch = vi.fn()
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(CHAT_RESPONSE) } as Response)
+      .mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ id: "proj-99", title: "Quantum computing", topic: "Quantum computing", document_type: "book", last_modified: "2026-05-07T10:00:00+00:00" }),
+      } as Response);
+
+    render(<Interview onProjectCreated={onProjectCreated} />);
+
+    await screen.findByText("What topic are you writing about?");
+
+    const done = screen.getByRole("button", { name: /done/i });
+    await userEvent.click(done);
+    await userEvent.click(done);
+
+    const projectPostCalls = (global.fetch as ReturnType<typeof vi.fn>).mock.calls.filter(
+      ([url]: [string]) => url === "http://127.0.0.1:8000/projects",
+    );
+    await vi.waitFor(() => expect(projectPostCalls).toHaveLength(1));
   });
 });

@@ -23,6 +23,7 @@ export default function Interview({ onProjectCreated }: InterviewProps) {
   const [isReady, setIsReady] = useState(false);
   const [readyMetadata, setReadyMetadata] = useState<ProjectMetadata | null>(null);
   const [isSending, setIsSending] = useState(false);
+  const [isFinishing, setIsFinishing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const initialized = useRef(false);
 
@@ -76,6 +77,8 @@ export default function Interview({ onProjectCreated }: InterviewProps) {
   }
 
   async function handleDone() {
+    if (isFinishing) return;
+    setIsFinishing(true);
     const topic = readyMetadata?.topic ?? messages.find((m) => m.role === "user")?.content ?? "Untitled";
     const document_type = readyMetadata?.document_type ?? "article";
 
@@ -86,6 +89,7 @@ export default function Interview({ onProjectCreated }: InterviewProps) {
     });
     if (!projectRes.ok) {
       setError("Failed to create project.");
+      setIsFinishing(false);
       return;
     }
     const project = await projectRes.json();
@@ -140,7 +144,7 @@ export default function Interview({ onProjectCreated }: InterviewProps) {
           <button
             className="rounded border px-4 py-2"
             onClick={handleDone}
-            disabled={isSending}
+            disabled={isSending || isFinishing}
           >
             Done
           </button>
