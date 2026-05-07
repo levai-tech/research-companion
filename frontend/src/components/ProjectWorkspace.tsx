@@ -12,8 +12,14 @@ interface Approach {
   description: string;
 }
 
+interface TranscriptMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
 interface Transcript {
   summary: string;
+  messages: TranscriptMessage[];
 }
 
 interface OutlineSection {
@@ -26,7 +32,7 @@ interface Outline {
   sections: OutlineSection[];
 }
 
-type Tab = "approach" | "outline" | "editor";
+type Tab = "transcript" | "approach" | "outline" | "editor";
 
 interface Props {
   project: Project;
@@ -38,7 +44,7 @@ export default function ProjectWorkspace({ project, onBack }: Props) {
   const [approach, setApproach] = useState<Approach | null>(null);
   const [transcript, setTranscript] = useState<Transcript | null>(null);
   const [outline, setOutline] = useState<Outline | null>(null);
-  const [tab, setTab] = useState<Tab>("approach");
+  const [tab, setTab] = useState<Tab>("transcript");
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -51,7 +57,6 @@ export default function ProjectWorkspace({ project, onBack }: Props) {
       setApproach(approachData);
       setTranscript(transcriptData);
       setOutline(outlineData);
-      if (approachData) setTab("outline");
     }).finally(() => setIsLoading(false));
   }, [port, project.id]);
 
@@ -101,7 +106,7 @@ export default function ProjectWorkspace({ project, onBack }: Props) {
 
       {/* Tab nav */}
       <div className="flex gap-1 border-b px-6 pt-2">
-        {(["approach", "outline", "editor"] as Tab[]).map((t) => (
+        {(["transcript", "approach", "outline", "editor"] as Tab[]).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -124,6 +129,28 @@ export default function ProjectWorkspace({ project, onBack }: Props) {
 
       {/* Tab content */}
       <div className="flex-1 overflow-y-auto">
+        {tab === "transcript" && (
+          transcript ? (
+            <div className="p-6 flex flex-col gap-4">
+              <div className="rounded border bg-muted/30 p-4">
+                <p className="text-sm font-medium text-muted-foreground mb-1">Summary</p>
+                <p className="text-sm">{transcript.summary}</p>
+              </div>
+              <div className="flex flex-col gap-2">
+                {transcript.messages.map((m, i) => (
+                  <div key={i} className={m.role === "user" ? "text-right" : "text-left"}>
+                    <span className="inline-block rounded px-3 py-2 text-sm bg-muted">
+                      {m.content}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="p-6 text-sm text-muted-foreground">No transcript yet.</div>
+          )
+        )}
+
         {tab === "approach" && (
           approach ? (
             <div className="p-6 flex flex-col gap-3">
