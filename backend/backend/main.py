@@ -78,6 +78,12 @@ def create_app(settings_path: Path | None = None, projects_dir: Path | None = No
         )
         return project.to_dict()
 
+    @app.delete("/projects/{project_id}", status_code=204)
+    async def delete_project(project_id: str):
+        if not project_service.delete(project_id):
+            raise HTTPException(status_code=404, detail="Project not found")
+        return Response(status_code=204)
+
     @app.post("/projects/{project_id}/approaches/propose")
     async def post_approaches_propose(project_id: str, body: dict):
         if project_service.get(project_id) is None:

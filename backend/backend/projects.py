@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 import sqlite3
 import uuid
 from dataclasses import dataclass, asdict, field
@@ -205,6 +206,13 @@ class ProjectService:
             if row:
                 projects.append(Project(*row))
         return projects
+
+    def delete(self, project_id: str) -> bool:
+        project_dir = self._projects_dir / project_id
+        if not project_dir.exists():
+            return False
+        shutil.rmtree(project_dir)
+        return True
 
     def get(self, project_id: str) -> Project | None:
         db_path = self._projects_dir / project_id / "db.sqlite"

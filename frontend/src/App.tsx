@@ -9,7 +9,7 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false);
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="h-screen flex flex-col overflow-hidden">
       <header className="flex items-center justify-between border-b px-6 py-3">
         <span className="font-semibold text-sm">Research Companion</span>
         <button
@@ -21,7 +21,7 @@ export default function App() {
         </button>
       </header>
 
-      <main className="flex-1">
+      <main className="flex-1 min-h-0 overflow-hidden">
         {showSettings ? (
           <SettingsPage onClose={() => setShowSettings(false)} />
         ) : (

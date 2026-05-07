@@ -1,20 +1,28 @@
 import { useState } from "react";
+import { Trash2 } from "lucide-react";
 import { useProjects, type Project } from "../hooks/useProjects";
+import { useAppStore } from "../store";
 import Interview from "./Interview";
 import ProjectWorkspace from "./ProjectWorkspace";
 
-function ProjectCard({ project, onClick }: { project: Project; onClick: () => void }) {
+function ProjectCard({ project, onClick, onDelete }: { project: Project; onClick: () => void; onDelete: () => void }) {
   return (
-    <button
-      className="w-full rounded border p-4 text-left hover:bg-muted/50 transition-colors"
-      onClick={onClick}
-    >
-      <h3 className="font-semibold">{project.title}</h3>
-      <p className="text-sm text-muted-foreground capitalize">{project.document_type}</p>
-      <p className="text-xs text-muted-foreground">
-        {new Date(project.last_modified).toLocaleDateString()}
-      </p>
-    </button>
+    <div className="relative group rounded border hover:bg-muted/50 transition-colors">
+      <button className="w-full p-4 text-left" onClick={onClick}>
+        <h3 className="font-semibold">{project.title}</h3>
+        <p className="text-sm text-muted-foreground capitalize">{project.document_type}</p>
+        <p className="text-xs text-muted-foreground">
+          {new Date(project.last_modified).toLocaleDateString()}
+        </p>
+      </button>
+      <button
+        aria-label="Delete project"
+        className="absolute top-2 right-2 p-1.5 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+        onClick={(e) => { e.stopPropagation(); onDelete(); }}
+      >
+        <Trash2 className="h-4 w-4" />
+      </button>
+    </div>
   );
 }
 
@@ -22,6 +30,7 @@ type View = "home" | "new-project" | "workspace";
 
 export default function HomeScreen() {
   const { projects, isLoading, refetch } = useProjects();
+  const port = useAppStore((s) => s.backendPort);
   const [view, setView] = useState<View>("home");
   const [activeProject, setActiveProject] = useState<Project | null>(null);
 
@@ -33,6 +42,12 @@ export default function HomeScreen() {
   function openProject(project: Project) {
     setActiveProject(project);
     setView("workspace");
+  }
+
+  function deleteProject(projectId: string) {
+    if (!port) return;
+    fetch(`http://127.0.0.1:${port}/projects/${projectId}`, { method: "DELETE" })
+      .then(() => refetch());
   }
 
   if (view === "new-project") {
@@ -77,7 +92,7 @@ export default function HomeScreen() {
       ) : (
         <div className="grid gap-4">
           {projects.map((p) => (
-            <ProjectCard key={p.id} project={p} onClick={() => openProject(p)} />
+            <ProjectCard key={p.id} project={p} onClick={() => openProject(p)} onDelete={() => deleteProject(p.id)} />
           ))}
         </div>
       )}

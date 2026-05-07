@@ -51,7 +51,7 @@ export default function BlockEditor({ projectId }: Props) {
   return (
     <div className="h-full flex flex-col">
       <EditorRibbon editor={editor} />
-      <div className="flex-1 overflow-y-auto px-8 py-6 prose prose-neutral max-w-3xl mx-auto">
+      <div className="flex-1 overflow-y-auto px-8 py-6 prose prose-neutral max-w-4xl mx-auto">
         <EditorContent editor={editor} />
       </div>
     </div>

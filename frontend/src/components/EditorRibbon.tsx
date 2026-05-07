@@ -82,7 +82,7 @@ function RibbonContent({ editor }: { editor: Editor }) {
     });
 
   return (
-    <div className="flex items-center gap-0.5 px-3 py-1.5 border-b border-neutral-200 bg-white shrink-0">
+    <div className="sticky top-0 z-10 flex items-center gap-0.5 px-3 py-1.5 border-b border-neutral-200 bg-white shrink-0">
       <Btn label="Normal text" active={isPara} onActivate={() => editor.commands.setParagraph()}>
         <span className="text-xs leading-none">¶</span>
       </Btn>
