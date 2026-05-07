@@ -5,6 +5,7 @@ import ApproachExplorer from "./ApproachExplorer";
 import OutlineGenerator from "./OutlineGenerator";
 import BlockEditor from "./BlockEditor";
 import ResourcesTab from "./ResourcesTab";
+import JobTray from "./JobTray";
 import { outlineToDoc } from "../utils/outlineToDoc";
 
 interface Approach {
@@ -129,7 +130,7 @@ export default function ProjectWorkspace({ project, onBack }: Props) {
       </div>
 
       {/* Tab content */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto min-h-0">
         {tab === "transcript" && (
           transcript ? (
             <div className="p-6 flex flex-col gap-4">
@@ -215,6 +216,8 @@ export default function ProjectWorkspace({ project, onBack }: Props) {
           )
         )}
       </div>
+
+      <JobTray projectId={project.id} />
     </div>
   );
 }

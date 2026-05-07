@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useAppStore } from "../store";
+import { useJobTrayStore } from "../jobTrayStore";
 import AddResourceModal from "./AddResourceModal";
 
 interface Resource {
@@ -24,6 +25,7 @@ const STATUS_CLASS: Record<string, string> = {
 
 export default function ResourcesTab({ projectId }: Props) {
   const port = useAppStore((s) => s.backendPort);
+  const registerJob = useJobTrayStore((s) => s.registerJob);
   const [resources, setResources] = useState<Resource[]>([]);
   const [showModal, setShowModal] = useState(false);
 
@@ -88,7 +90,15 @@ export default function ResourcesTab({ projectId }: Props) {
           projectId={projectId}
           onClose={() => setShowModal(false)}
           onResourceAdded={(resource) => {
-            setResources((prev) => [...prev, resource as Resource]);
+            const r = resource as Resource;
+            setResources((prev) => [...prev, r]);
+            if (r.indexing_status !== "ready") {
+              registerJob(
+                projectId,
+                r.id,
+                r.citation_metadata?.title ?? "(untitled)",
+              );
+            }
             setShowModal(false);
           }}
         />

@@ -63,6 +63,8 @@ class IngestionService:
     def get_status(self, resource_id: str) -> dict | None:
         return self._store.get_status(resource_id)
 
+    _EMBED_BATCH = 64
+
     def run_ingestion(
         self,
         resource_id: str,
@@ -74,9 +76,13 @@ class IngestionService:
             chunks = chunker.chunk(text)
             total = len(chunks)
             self._store.update_status(resource_id, "indexing", chunks_total=total)
-            embeddings = embedder.embed(chunks)
+            all_embeddings: list[list[float]] = []
+            for i in range(0, total, self._EMBED_BATCH):
+                batch = chunks[i : i + self._EMBED_BATCH]
+                all_embeddings.extend(embedder.embed(batch))
+                self._store.update_progress(resource_id, i + len(batch), total)
             self._store.store_chunks_and_embeddings(
-                resource_id, chunks, embeddings, chunker.id, embedder.id
+                resource_id, chunks, all_embeddings, chunker.id, embedder.id
             )
         except Exception as exc:
             self._store.update_status(resource_id, "failed", error_message=str(exc))

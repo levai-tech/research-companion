@@ -2,9 +2,14 @@ import { render, screen } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import ProjectWorkspace from "./ProjectWorkspace";
 import { useAppStore } from "../store";
+import { useJobTrayStore } from "../jobTrayStore";
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(),
+}));
+
+vi.mock("./JobTray", () => ({
+  default: () => null,
 }));
 
 vi.mock("./ApproachExplorer", () => ({
@@ -75,6 +80,7 @@ function mockFetch({
 
 beforeEach(() => {
   useAppStore.setState({ backendPort: 8000 });
+  useJobTrayStore.setState({ jobs: {} });
   vi.clearAllMocks();
 });
 

@@ -3,6 +3,34 @@ import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import ResourcesTab from "./ResourcesTab";
 import { useAppStore } from "../store";
+import { useJobTrayStore } from "../jobTrayStore";
+
+vi.mock("./AddResourceModal", () => ({
+  default: ({
+    onResourceAdded,
+  }: {
+    onResourceAdded: (r: unknown) => void;
+    projectId: string;
+    onClose: () => void;
+  }) => (
+    <div role="dialog">
+      <button
+        onClick={() =>
+          onResourceAdded({
+            id: "new-res",
+            resource_type: "Book",
+            indexing_status: "queued",
+            citation_metadata: { title: "New Book" },
+            content_hash: "h3",
+            created_at: "2026-01-01T00:00:00Z",
+          })
+        }
+      >
+        Confirm Add
+      </button>
+    </div>
+  ),
+}));
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(),
@@ -10,6 +38,7 @@ vi.mock("@tauri-apps/api/core", () => ({
 
 beforeEach(() => {
   useAppStore.setState({ backendPort: 8000 });
+  useJobTrayStore.setState({ jobs: {} });
   vi.clearAllMocks();
 });
 
@@ -79,6 +108,23 @@ it("clicking Add Resource opens the Add Resource modal", async () => {
   await userEvent.click(screen.getByRole("button", { name: /add resource/i }));
 
   expect(screen.getByRole("dialog")).toBeInTheDocument();
+});
+
+// ── Behavior 5: registers newly-added resource in job tray store ──────────────
+
+it("registers a newly added queued resource in the job tray store", async () => {
+  global.fetch = mockList([]);
+
+  render(<ResourcesTab projectId="proj-1" />);
+
+  await screen.findByRole("button", { name: /add resource/i });
+  await userEvent.click(screen.getByRole("button", { name: /add resource/i }));
+  await userEvent.click(screen.getByRole("button", { name: /confirm add/i }));
+
+  const jobs = useJobTrayStore.getState().jobs;
+  expect(jobs["new-res"]).toBeDefined();
+  expect(jobs["new-res"].title).toBe("New Book");
+  expect(jobs["new-res"].projectId).toBe("proj-1");
 });
 
 // ── Behavior 4: delete button calls DELETE and removes resource from list ─────

@@ -178,6 +178,15 @@ class ResourceStore:
         con.commit()
         con.close()
 
+    def update_progress(self, resource_id: str, chunks_done: int, chunks_total: int) -> None:
+        con = self._connect()
+        con.execute(
+            "UPDATE resources SET chunks_done=?, chunks_total=? WHERE id=?",
+            (chunks_done, chunks_total, resource_id),
+        )
+        con.commit()
+        con.close()
+
     def get(self, resource_id: str) -> Resource | None:
         con = self._connect()
         resource = self._select_resource(con, "id = ?", (resource_id,))
