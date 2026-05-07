@@ -4,6 +4,7 @@ import type { Project } from "../hooks/useProjects";
 import ApproachExplorer from "./ApproachExplorer";
 import OutlineGenerator from "./OutlineGenerator";
 import BlockEditor from "./BlockEditor";
+import { outlineToDoc } from "../utils/outlineToDoc";
 
 interface Approach {
   id: string;
@@ -22,7 +23,6 @@ interface OutlineSection {
 }
 
 interface Outline {
-  structure: { title: string; rationale: string; tradeoff: string } | null;
   sections: OutlineSection[];
 }
 
@@ -69,7 +69,16 @@ export default function ProjectWorkspace({ project, onBack }: Props) {
     if (!port) return;
     fetch(`http://127.0.0.1:${port}/projects/${project.id}/outline`)
       .then((r) => r.json())
-      .then((data: Outline) => setOutline(data));
+      .then((data: Outline) => {
+        setOutline(data);
+        const doc = outlineToDoc(project.title, data.sections);
+        return fetch(`http://127.0.0.1:${port}/projects/${project.id}/document`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(doc),
+        });
+      })
+      .then(() => setTab("editor"));
   }
 
   if (isLoading) return <div className="p-6">Loading project…</div>;
@@ -106,7 +115,7 @@ export default function ProjectWorkspace({ project, onBack }: Props) {
             {t === "approach" && approach && (
               <span className="ml-1.5 text-xs text-green-600">✓</span>
             )}
-            {t === "outline" && outline?.structure && (
+            {t === "outline" && (outline?.sections.length ?? 0) > 0 && (
               <span className="ml-1.5 text-xs text-green-600">✓</span>
             )}
           </button>
@@ -137,12 +146,8 @@ export default function ProjectWorkspace({ project, onBack }: Props) {
         )}
 
         {tab === "outline" && (
-          outline?.structure ? (
+          outline && outline.sections.length > 0 ? (
             <div className="p-6 flex flex-col gap-4">
-              <div className="rounded border bg-muted/30 p-3 text-sm">
-                <span className="font-medium">Structure: </span>{outline.structure.title}
-                <span className="text-muted-foreground"> — {outline.structure.rationale}</span>
-              </div>
               <ol className="flex flex-col gap-3">
                 {outline.sections.map((section, i) => (
                   <li key={i} className="rounded border p-4">

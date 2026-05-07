@@ -108,25 +108,23 @@ def create_app(settings_path: Path | None = None, projects_dir: Path | None = No
         return approach.to_dict() if approach else None
 
     @app.post("/projects/{project_id}/outline/generate")
-    async def post_outline_generate(project_id: str, body: dict):
+    async def post_outline_generate(project_id: str):
         if project_service.get(project_id) is None:
             raise HTTPException(status_code=404, detail="Project not found")
         project = project_service.get(project_id)
         approach = project_service.get_approach(project_id)
         approach_dict = approach.to_dict() if approach else {}
-        structure = body["structure"]
         try:
             sections = await outline_generator.generate_outline(
                 approach_dict,
                 project.document_type,
-                structure,
                 role="outline_generator",
             )
         except httpx.HTTPStatusError as e:
             raise _llm_error(e)
         except RuntimeError as e:
             raise HTTPException(status_code=400, detail=str(e))
-        outline = project_service.save_outline(project_id, structure, sections)
+        outline = project_service.save_outline(project_id, sections)
         return outline.to_dict()
 
     @app.get("/projects/{project_id}/outline")

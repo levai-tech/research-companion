@@ -27,8 +27,6 @@ async def _save_approach(client: httpx.AsyncClient, project_id: str) -> None:
     )
 
 
-_MOCK_STRUCTURE = {"id": "chronological", "title": "Chronological", "rationale": "Traces the story from past to present.", "tradeoff": "Easier to follow but may bury the most urgent point."}
-
 _MOCK_SECTIONS = [
     {
         "title": "The Ticking Clock",
@@ -48,9 +46,10 @@ _MOCK_SECTIONS = [
 ]
 
 
-# ── Behavior 1: POST /outline/generate returns sections with subsections ───────
+# ── Behavior 1: POST /outline/generate returns sections (no structure in body) ─
 
-async def test_generate_outline_returns_sections_with_subsections(app):
+@pytest.mark.anyio
+async def test_generate_outline_returns_sections(app):
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
         project_id = await _create_project(client)
@@ -60,23 +59,20 @@ async def test_generate_outline_returns_sections_with_subsections(app):
             mock_llm.return_value = _MOCK_SECTIONS
             response = await client.post(
                 f"/projects/{project_id}/outline/generate",
-                json={"structure": _MOCK_STRUCTURE},
+                json={},
             )
 
     assert response.status_code == 200
     body = response.json()
-    assert "structure" in body
     assert "sections" in body
-    sections = body["sections"]
-    assert len(sections) == 2
-    assert sections[0]["title"] == "The Ticking Clock"
-    assert len(sections[0]["subsections"]) == 2
-    assert sections[0]["subsections"][0]["title"] == "What Quantum Computers Can Do Today"
+    assert len(body["sections"]) == 2
+    assert body["sections"][0]["title"] == "The Ticking Clock"
 
 
-# ── Behavior 2: generate persists structure and sections to SQLite ────────────
+# ── Behavior 2: sections are persisted and readable via GET /outline ──────────
 
-async def test_generate_persists_outline_to_database(app):
+@pytest.mark.anyio
+async def test_generate_persists_sections_to_database(app):
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
         project_id = await _create_project(client)
@@ -84,21 +80,21 @@ async def test_generate_persists_outline_to_database(app):
 
         with patch("backend.outline_generator.generate_outline", new_callable=AsyncMock) as mock_llm:
             mock_llm.return_value = _MOCK_SECTIONS
-            await client.post(
-                f"/projects/{project_id}/outline/generate",
-                json={"structure": _MOCK_STRUCTURE},
-            )
+            await client.post(f"/projects/{project_id}/outline/generate", json={})
 
         response = await client.get(f"/projects/{project_id}/outline")
 
     assert response.status_code == 200
     body = response.json()
-    assert body["structure"]["title"] == "Chronological"
+    assert "structure" not in body
     assert len(body["sections"]) == 2
+    assert body["sections"][0]["title"] == "The Ticking Clock"
+    assert len(body["sections"][0]["subsections"]) == 2
 
 
-# ── Behavior 3: GET /outline returns empty when none generated ────────────────
+# ── Behavior 3: GET /outline returns empty sections when none generated ───────
 
+@pytest.mark.anyio
 async def test_get_outline_returns_empty_when_none_generated(app):
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
@@ -107,13 +103,14 @@ async def test_get_outline_returns_empty_when_none_generated(app):
 
     assert response.status_code == 200
     body = response.json()
-    assert body["structure"] is None
     assert body["sections"] == []
+    assert "structure" not in body
 
 
-# ── Behavior 4: generate routes via outline_generator role ───────────────────
+# ── Behavior 4: generate_outline is called with approach and role ─────────────
 
-async def test_generate_routes_via_outline_generator_role(app):
+@pytest.mark.anyio
+async def test_generate_outline_called_with_approach_and_role(app):
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
         project_id = await _create_project(client)
@@ -121,11 +118,11 @@ async def test_generate_routes_via_outline_generator_role(app):
 
         with patch("backend.outline_generator.generate_outline", new_callable=AsyncMock) as mock_llm:
             mock_llm.return_value = _MOCK_SECTIONS
-            await client.post(
-                f"/projects/{project_id}/outline/generate",
-                json={"structure": _MOCK_STRUCTURE},
-            )
+            await client.post(f"/projects/{project_id}/outline/generate", json={})
 
     mock_llm.assert_awaited_once()
-    _, kwargs = mock_llm.call_args
+    args, kwargs = mock_llm.call_args
+    approach_arg = args[0]
+    assert approach_arg["title"] == "The Clock Is Ticking"
+    assert approach_arg["description"] == "Encryption at risk."
     assert kwargs.get("role") == "outline_generator"

@@ -118,19 +118,6 @@ FROM project_meta LIMIT 1
 
 
 @dataclass
-class OutlineStructure:
-    id: str
-    project_id: str
-    structure_id: str
-    title: str
-    rationale: str
-    tradeoff: str
-
-    def to_dict(self) -> dict:
-        return asdict(self)
-
-
-@dataclass
 class OutlineSection:
     id: str
     project_id: str
@@ -148,31 +135,13 @@ class OutlineSection:
 
 @dataclass
 class Outline:
-    structure: OutlineStructure | None
     sections: list[OutlineSection]
 
     def to_dict(self) -> dict:
         return {
-            "structure": self.structure.to_dict() if self.structure else None,
             "sections": [s.to_dict() for s in self.sections],
         }
 
-
-_CREATE_OUTLINE_STRUCTURE_TABLE = """
-CREATE TABLE IF NOT EXISTS outline_structure (
-    id           TEXT PRIMARY KEY,
-    project_id   TEXT NOT NULL,
-    structure_id TEXT NOT NULL,
-    title        TEXT NOT NULL,
-    rationale    TEXT NOT NULL,
-    tradeoff     TEXT NOT NULL
-)
-"""
-
-_INSERT_OUTLINE_STRUCTURE = """
-INSERT INTO outline_structure (id, project_id, structure_id, title, rationale, tradeoff)
-VALUES (?, ?, ?, ?, ?, ?)
-"""
 
 _CREATE_OUTLINE_SECTIONS_TABLE = """
 CREATE TABLE IF NOT EXISTS outline_sections (
@@ -291,20 +260,11 @@ class ProjectService:
     def save_outline(
         self,
         project_id: str,
-        structure: dict,
         sections: list[dict],
     ) -> "Outline":
         con = self._db(project_id)
-        con.execute(_CREATE_OUTLINE_STRUCTURE_TABLE)
         con.execute(_CREATE_OUTLINE_SECTIONS_TABLE)
-        con.execute("DELETE FROM outline_structure WHERE project_id = ?", (project_id,))
         con.execute("DELETE FROM outline_sections WHERE project_id = ?", (project_id,))
-
-        structure_id = str(uuid.uuid4())
-        con.execute(
-            _INSERT_OUTLINE_STRUCTURE,
-            (structure_id, project_id, structure["id"], structure["title"], structure["rationale"], structure["tradeoff"]),
-        )
 
         saved_sections: list[OutlineSection] = []
         for pos, section in enumerate(sections):
@@ -340,35 +300,13 @@ class ProjectService:
 
         con.commit()
         con.close()
-        return Outline(
-            structure=OutlineStructure(
-                id=structure_id,
-                project_id=project_id,
-                structure_id=structure["id"],
-                title=structure["title"],
-                rationale=structure["rationale"],
-                tradeoff=structure["tradeoff"],
-            ),
-            sections=saved_sections,
-        )
+        return Outline(sections=saved_sections)
 
     def get_outline(self, project_id: str) -> "Outline":
         if not (self._projects_dir / project_id / "db.sqlite").exists():
-            return Outline(structure=None, sections=[])
+            return Outline(sections=[])
         con = self._db(project_id)
-        con.execute(_CREATE_OUTLINE_STRUCTURE_TABLE)
         con.execute(_CREATE_OUTLINE_SECTIONS_TABLE)
-
-        row = con.execute(
-            "SELECT id, project_id, structure_id, title, rationale, tradeoff FROM outline_structure WHERE project_id = ? LIMIT 1",
-            (project_id,),
-        ).fetchone()
-
-        if row is None:
-            con.close()
-            return Outline(structure=None, sections=[])
-
-        structure = OutlineStructure(*row)
 
         section_rows = con.execute(
             "SELECT id, project_id, parent_id, title, description, position FROM outline_sections WHERE project_id = ? ORDER BY parent_id IS NOT NULL, position",
@@ -388,7 +326,7 @@ class ProjectService:
                 if parent:
                     parent.subsections.append(sec)
 
-        return Outline(structure=structure, sections=top_level)
+        return Outline(sections=top_level)
 
     def get_document(self, project_id: str) -> dict:
         project = self.get(project_id)
