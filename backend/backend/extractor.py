@@ -69,6 +69,52 @@ def extract_file(data: bytes, filename: str) -> tuple[str, dict]:
     return text, {}
 
 
+def extract_file_pages(content: bytes, filename: str) -> list[tuple[int, str]]:
+    """Return page-tagged text as (page_number, text) tuples."""
+    name = filename.lower()
+    if name.endswith(".pdf"):
+        return _extract_pdf_pages(content)
+    if name.endswith(".docx"):
+        return _extract_docx_pages(content)
+    text = content.decode("utf-8", errors="replace")
+    return [(1, text)]
+
+
+def _extract_pdf_pages(data: bytes) -> list[tuple[int, str]]:
+    import pymupdf  # type: ignore
+
+    doc = pymupdf.open(stream=data, filetype="pdf")
+    return [(i + 1, page.get_text()) for i, page in enumerate(doc)]
+
+
+def _extract_docx_pages(data: bytes) -> list[tuple[int, str]]:
+    from docx import Document  # type: ignore
+
+    doc = Document(io.BytesIO(data))
+    sections: list[list[str]] = []
+    current: list[str] = []
+
+    for para in doc.paragraphs:
+        text = para.text.strip()
+        if not text:
+            continue
+        is_heading = para.style.name.lower().startswith("heading")
+        if is_heading:
+            if current:
+                sections.append(current)
+            current = [text]
+        else:
+            current.append(text)
+
+    if current:
+        sections.append(current)
+
+    if not sections:
+        return [(1, "")]
+
+    return [(i + 1, "\n".join(lines)) for i, lines in enumerate(sections)]
+
+
 def extract_url(html: str) -> tuple[str, dict]:
     """Return (text, citation_metadata) from fetched HTML."""
     return _extract_html(html)
