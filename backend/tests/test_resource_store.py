@@ -43,6 +43,50 @@ def test_schema_embeddings_virtual_table_exists(store, tmp_path):
     assert "embeddings" in names
 
 
+def test_schema_chunks_has_location_column(store, tmp_path):
+    con = sqlite3.connect(tmp_path / "resources.db")
+    cols = {r[1] for r in con.execute("PRAGMA table_info(chunks)").fetchall()}
+    con.close()
+    assert "location" in cols
+
+
+def test_store_chunks_and_embeddings_stores_locations(store, tmp_path):
+    resource = store.get_or_create("hash-loc", "Book")
+    chunks = ["first chunk", "second chunk"]
+    embeddings = [[0.1] * 384, [0.2] * 384]
+    locations = ["p. 1", "p. 2"]
+
+    store.store_chunks_and_embeddings(
+        resource.id, chunks, embeddings, "chunker-v1", "embedder-v1",
+        locations=locations,
+    )
+
+    con = sqlite3.connect(tmp_path / "resources.db")
+    rows = con.execute(
+        "SELECT text, location FROM chunks WHERE resource_id=? ORDER BY position",
+        (resource.id,),
+    ).fetchall()
+    con.close()
+    assert rows == [("first chunk", "p. 1"), ("second chunk", "p. 2")]
+
+
+def test_store_chunks_without_locations_stores_null(store, tmp_path):
+    resource = store.get_or_create("hash-noloc", "Book")
+    chunks = ["only chunk"]
+    embeddings = [[0.1] * 384]
+
+    store.store_chunks_and_embeddings(
+        resource.id, chunks, embeddings, "chunker-v1", "embedder-v1",
+    )
+
+    con = sqlite3.connect(tmp_path / "resources.db")
+    row = con.execute(
+        "SELECT location FROM chunks WHERE resource_id=?", (resource.id,)
+    ).fetchone()
+    con.close()
+    assert row[0] is None
+
+
 # ── Behavior 2: get_or_create creates ─────────────────────────────────────────
 
 def test_get_or_create_returns_resource_with_queued_status(store):
@@ -213,3 +257,42 @@ def test_detach_last_reference_deletes_raw_file(store, tmp_path):
     store.detach("proj-1", resource.id)
 
     assert not raw_file.exists()
+
+
+# ── Behavior 8: search returns location ───────────────────────────────────────
+
+def test_search_results_include_location(store):
+    resource = store.get_or_create("hash-search", "Book")
+    store.update_status(resource.id, "ready")
+    store.store_chunks_and_embeddings(
+        resource.id,
+        chunks=["hello world"],
+        embeddings=[[0.1] * 384],
+        chunker_id="c",
+        embedder_id="e",
+        locations=["p. 7"],
+    )
+    store.attach("proj-search", resource.id)
+
+    results = store.search("proj-search", [0.1] * 384, top_k=1)
+
+    assert len(results) == 1
+    assert results[0]["location"] == "p. 7"
+
+
+def test_search_results_location_is_none_when_not_stored(store):
+    resource = store.get_or_create("hash-search-null", "Book")
+    store.update_status(resource.id, "ready")
+    store.store_chunks_and_embeddings(
+        resource.id,
+        chunks=["hello world"],
+        embeddings=[[0.1] * 384],
+        chunker_id="c",
+        embedder_id="e",
+    )
+    store.attach("proj-search-null", resource.id)
+
+    results = store.search("proj-search-null", [0.1] * 384, top_k=1)
+
+    assert len(results) == 1
+    assert results[0]["location"] is None

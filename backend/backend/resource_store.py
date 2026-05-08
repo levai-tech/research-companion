@@ -50,6 +50,7 @@ _MIGRATIONS = [
     "ALTER TABLE resources ADD COLUMN chunks_done INTEGER NOT NULL DEFAULT 0",
     "ALTER TABLE resources ADD COLUMN chunks_total INTEGER NOT NULL DEFAULT 0",
     "ALTER TABLE resources ADD COLUMN error_message TEXT",
+    "ALTER TABLE chunks ADD COLUMN location TEXT",
 ]
 
 _CREATE_CHUNKS = """
@@ -57,7 +58,8 @@ CREATE TABLE IF NOT EXISTS chunks (
     id          TEXT PRIMARY KEY,
     resource_id TEXT NOT NULL REFERENCES resources(id),
     text        TEXT NOT NULL,
-    position    INTEGER NOT NULL
+    position    INTEGER NOT NULL,
+    location    TEXT
 )
 """
 
@@ -213,6 +215,7 @@ class ResourceStore:
         embeddings: list[list[float]],
         chunker_id: str,
         embedder_id: str,
+        locations: list[str | None] | None = None,
     ) -> None:
         con = self._connect()
         existing_chunk_ids = [
@@ -223,11 +226,12 @@ class ResourceStore:
         for cid in existing_chunk_ids:
             con.execute("DELETE FROM embeddings WHERE chunk_id = ?", (cid,))
         con.execute("DELETE FROM chunks WHERE resource_id = ?", (resource_id,))
-        for i, (text, vector) in enumerate(zip(chunks, embeddings)):
+        locs = locations if locations is not None else [None] * len(chunks)
+        for i, (text, vector, loc) in enumerate(zip(chunks, embeddings, locs)):
             chunk_id = str(uuid.uuid4())
             con.execute(
-                "INSERT INTO chunks (id, resource_id, text, position) VALUES (?, ?, ?, ?)",
-                (chunk_id, resource_id, text, i),
+                "INSERT INTO chunks (id, resource_id, text, position, location) VALUES (?, ?, ?, ?, ?)",
+                (chunk_id, resource_id, text, i, loc),
             )
             con.execute(
                 "INSERT INTO embeddings (chunk_id, embedding) VALUES (?, ?)",
@@ -318,7 +322,7 @@ class ResourceStore:
             if len(results) >= top_k:
                 break
             chunk_row = con.execute(
-                "SELECT text, resource_id FROM chunks WHERE id = ?", (chunk_id,)
+                "SELECT text, resource_id, location FROM chunks WHERE id = ?", (chunk_id,)
             ).fetchone()
             if chunk_row is None or chunk_row[1] not in ready_ids:
                 continue
@@ -328,6 +332,7 @@ class ResourceStore:
                 "score": round(max(0.0, 1.0 - float(distance)), 4),
                 "resource_type": resource.resource_type if resource else "",
                 "citation_metadata": resource.citation_metadata if resource else {},
+                "location": chunk_row[2],
             })
 
         con.close()
