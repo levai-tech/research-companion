@@ -30,6 +30,11 @@ def test_get_returns_defaults_when_file_absent(settings):
     assert result["ollama"]["embedding_model"] == "nomic-embed-text"
 
 
+def test_settings_default_includes_semantic_ingester_model(settings):
+    result = settings.get()
+    assert result["roles"]["semantic_ingester"]["model"] == "anthropic/claude-haiku-4-5"
+
+
 def test_update_persists_role_model(settings, tmp_settings_path):
     settings.update({"roles": {"research_agent": {"model": "google/gemini-2.5-flash"}}})
     data = json.loads(tmp_settings_path.read_text())

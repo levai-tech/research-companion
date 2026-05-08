@@ -20,18 +20,38 @@ _DEFAULT_BASE_DIR = Path.home() / ".research-companion"
 
 
 # Top-level so multiprocessing.spawn can pickle them.
-def _worker_file_pipeline(base_dir: str, resource_id: str, filename: str) -> None:
+def _worker_file_pipeline(
+    base_dir: str,
+    resource_id: str,
+    filename: str,
+    semantic_model: str | None = None,
+    semantic_api_key: str | None = None,
+) -> None:
     from backend.resource_store import ResourceStore
     from backend.ingestion import IngestionService
-    IngestionService(store=ResourceStore(base_dir=Path(base_dir))).run_file_pipeline(
+    si = None
+    if semantic_model and semantic_api_key:
+        from backend.semantic_ingester import SemanticIngester
+        si = SemanticIngester(model=semantic_model, api_key=semantic_api_key)
+    IngestionService(store=ResourceStore(base_dir=Path(base_dir)), semantic_ingester=si).run_file_pipeline(
         resource_id, filename
     )
 
 
-def _worker_url_pipeline(base_dir: str, resource_id: str, url: str) -> None:
+def _worker_url_pipeline(
+    base_dir: str,
+    resource_id: str,
+    url: str,
+    semantic_model: str | None = None,
+    semantic_api_key: str | None = None,
+) -> None:
     from backend.resource_store import ResourceStore
     from backend.ingestion import IngestionService
-    IngestionService(store=ResourceStore(base_dir=Path(base_dir))).run_url_pipeline(
+    si = None
+    if semantic_model and semantic_api_key:
+        from backend.semantic_ingester import SemanticIngester
+        si = SemanticIngester(model=semantic_model, api_key=semantic_api_key)
+    IngestionService(store=ResourceStore(base_dir=Path(base_dir)), semantic_ingester=si).run_url_pipeline(
         resource_id, url
     )
 
@@ -222,10 +242,13 @@ def create_app(settings_path: Path | None = None, projects_dir: Path | None = No
             citation_metadata=meta or None,
         )
         if result["indexing_status"] == "queued":
+            si_cfg = settings.get().get("roles", {}).get("semantic_ingester", {})
+            si_model = si_cfg.get("model")
+            si_key = settings.get_key("openrouter_api_key") if si_model else None
             background_tasks.add_task(
                 _spawn_ctx.Process(
                     target=_worker_file_pipeline,
-                    args=(str(base_dir), result["resource_id"], file.filename or "upload"),
+                    args=(str(base_dir), result["resource_id"], file.filename or "upload", si_model, si_key),
                     daemon=False,
                 ).start
             )
@@ -250,10 +273,13 @@ def create_app(settings_path: Path | None = None, projects_dir: Path | None = No
             citation_metadata=meta or None,
         )
         if result["indexing_status"] == "queued":
+            si_cfg = settings.get().get("roles", {}).get("semantic_ingester", {})
+            si_model = si_cfg.get("model")
+            si_key = settings.get_key("openrouter_api_key") if si_model else None
             background_tasks.add_task(
                 _spawn_ctx.Process(
                     target=_worker_url_pipeline,
-                    args=(str(base_dir), result["resource_id"], url),
+                    args=(str(base_dir), result["resource_id"], url, si_model, si_key),
                     daemon=False,
                 ).start
             )

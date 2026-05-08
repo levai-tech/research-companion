@@ -11,6 +11,7 @@ const ROLES: { key: string; label: string }[] = [
   { key: "literature_review", label: "Literature Review Synthesizer" },
   { key: "editor_ai", label: "Editor AI" },
   { key: "outline_generator", label: "Outline Generator" },
+  { key: "semantic_ingester", label: "Semantic Ingester" },
 ];
 
 const SEARCH_PROVIDERS = ["tavily", "brave"];

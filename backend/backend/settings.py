@@ -15,6 +15,7 @@ _DEFAULTS: dict = {
         "literature_review": {"model": "mistralai/mistral-7b-instruct:free"},
         "editor_ai": {"model": "mistralai/mistral-7b-instruct:free"},
         "outline_generator": {"model": "mistralai/mistral-7b-instruct:free"},
+        "semantic_ingester": {"model": "anthropic/claude-haiku-4-5"},
     },
     "search_provider": "tavily",
     "ollama": {

@@ -26,10 +26,12 @@ class IngestionService:
         store: ResourceStore,
         chunker: Chunker | None = None,
         embedder: Embedder | None = None,
+        semantic_ingester=None,
     ) -> None:
         self._store = store
         self._chunker: Chunker = chunker or RecursiveChunker()
         self._embedder: Embedder = embedder or FastEmbedEmbedder()
+        self._semantic_ingester = semantic_ingester
 
     @property
     def embedder(self) -> Embedder:
@@ -92,16 +94,21 @@ class IngestionService:
             self._store.update_status(resource_id, "failed", error_message=str(exc))
 
     def run_file_pipeline(self, resource_id: str, filename: str) -> None:
-        from backend.extractor import extract_file
+        from backend.extractor import extract_file, extract_file_pages
 
         src = self._store._sources_dir / _content_hash_for(resource_id, self._store)
         if src is None or not src.exists():
             self._store.update_status(resource_id, "failed", error_message="source file not found")
             return
-        text, citation = extract_file(src.read_bytes(), filename)
+        raw = src.read_bytes()
+        text, citation = extract_file(raw, filename)
         if citation:
             _merge_citation(self._store, resource_id, citation)
-        self.run_ingestion(resource_id, text, self._chunker, self._embedder)
+        if self._semantic_ingester is not None:
+            pages = extract_file_pages(raw, filename)
+            self._semantic_ingester.ingest(resource_id, pages, self._store, self._embedder)
+        else:
+            self.run_ingestion(resource_id, text, self._chunker, self._embedder)
 
     def run_url_pipeline(self, resource_id: str, url: str) -> None:
         from backend.extractor import extract_url
@@ -115,7 +122,10 @@ class IngestionService:
             return
         if citation:
             _merge_citation(self._store, resource_id, citation)
-        self.run_ingestion(resource_id, text, self._chunker, self._embedder)
+        if self._semantic_ingester is not None:
+            self._semantic_ingester.ingest(resource_id, [(1, text)], self._store, self._embedder)
+        else:
+            self.run_ingestion(resource_id, text, self._chunker, self._embedder)
 
 
 def _content_hash_for(resource_id: str, store: ResourceStore) -> str | None:
