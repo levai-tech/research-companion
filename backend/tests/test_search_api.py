@@ -131,6 +131,48 @@ async def test_search_top_k_limits_results(tmp_app, project, store, fake_embedde
     assert len(response.json()["results"]) == 3
 
 
+# ── Behavior 6: location is included in search results ───────────────────────
+
+async def test_search_result_includes_location_when_chunk_has_location(tmp_app, project, store, fake_embedder):
+    resource = store.get_or_create("hash-6", "Book", {"title": "Paged Book"})
+    chunks = ["A chunk with a page reference."]
+    embeddings = fake_embedder.embed(chunks)
+    store.store_chunks_and_embeddings(resource.id, chunks, embeddings, "c", fake_embedder.id, locations=["p. 12"])
+    store.attach(project.id, resource.id)
+
+    transport = httpx.ASGITransport(app=tmp_app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get(
+            f"/projects/{project.id}/resources/search",
+            params={"q": "page reference", "top_k": 5},
+        )
+
+    assert response.status_code == 200
+    result = response.json()["results"][0]
+    assert result["location"] == "p. 12"
+
+
+# ── Behavior 7: location is null when chunk has no location ──────────────────
+
+async def test_search_result_location_is_null_when_chunk_has_no_location(tmp_app, project, store, fake_embedder):
+    resource = store.get_or_create("hash-7", "Book", {"title": "Unlabelled Book"})
+    chunks = ["A chunk without a page reference."]
+    embeddings = fake_embedder.embed(chunks)
+    store.store_chunks_and_embeddings(resource.id, chunks, embeddings, "c", fake_embedder.id)
+    store.attach(project.id, resource.id)
+
+    transport = httpx.ASGITransport(app=tmp_app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get(
+            f"/projects/{project.id}/resources/search",
+            params={"q": "page reference", "top_k": 5},
+        )
+
+    assert response.status_code == 200
+    result = response.json()["results"][0]
+    assert result["location"] is None
+
+
 # ── Behavior 3: cross-project isolation ───────────────────────────────────────
 
 async def test_search_is_scoped_to_project(tmp_app, tmp_path, store, fake_embedder):

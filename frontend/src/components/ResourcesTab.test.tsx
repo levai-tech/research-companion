@@ -285,6 +285,56 @@ it("clicking a result card reveals the full chunk text", async () => {
   await screen.findByText(LONG_CHUNK, { normalizer: (s) => s });
 });
 
+// ── Behavior 14: location label shown when result has a location ──────────────
+
+it("shows a location label when the search result has a location", async () => {
+  const result = {
+    chunk_text: "Some relevant passage.",
+    score: 0.75,
+    resource_type: "Book",
+    citation_metadata: { title: "My Book" },
+    location: "p. 12",
+  };
+
+  global.fetch = vi.fn()
+    .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve([]) } as Response)
+    .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ results: [result] }) } as Response);
+
+  render(<ResourcesTab projectId="proj-1" />);
+  await screen.findByRole("button", { name: /add resource/i });
+  await userEvent.type(screen.getByPlaceholderText(/search resources/i), "passage");
+  await userEvent.click(screen.getByRole("button", { name: /^search$/i }));
+
+  await screen.findByText("Some relevant passage.");
+  expect(screen.getByText(/p\. 12/)).toBeInTheDocument();
+});
+
+// ── Behavior 15: location label absent when location is null ──────────────────
+
+it("does not render a location label when location is null", async () => {
+  const result = {
+    chunk_text: "Some relevant passage.",
+    score: 0.75,
+    resource_type: "Book",
+    citation_metadata: { title: "My Book" },
+    location: null,
+  };
+
+  global.fetch = vi.fn()
+    .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve([]) } as Response)
+    .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ results: [result] }) } as Response);
+
+  render(<ResourcesTab projectId="proj-1" />);
+  await screen.findByRole("button", { name: /add resource/i });
+  await userEvent.type(screen.getByPlaceholderText(/search resources/i), "passage");
+  await userEvent.click(screen.getByRole("button", { name: /^search$/i }));
+
+  await screen.findByText("Some relevant passage.");
+  expect(screen.queryByText("null")).not.toBeInTheDocument();
+  // score line should not contain a location separator
+  expect(screen.getByText(/Score: 0\.75/)).not.toHaveTextContent(/·/);
+});
+
 // ── Behavior 13: clicking the expanded card collapses it back ─────────────────
 
 it("clicking an expanded result card collapses back to preview", async () => {

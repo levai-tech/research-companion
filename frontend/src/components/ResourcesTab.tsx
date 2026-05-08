@@ -17,6 +17,7 @@ interface SearchResult {
   score: number;
   resource_type: string;
   citation_metadata: { title?: string; [key: string]: unknown };
+  location?: string | null;
 }
 
 interface Props {
@@ -125,7 +126,9 @@ export default function ResourcesTab({ projectId }: Props) {
                     <p className="text-xs text-muted-foreground">
                       {result.citation_metadata?.title ?? "(untitled)"} · {result.resource_type}
                     </p>
-                    <p className="text-xs text-muted-foreground">Score: {result.score}</p>
+                    <p className="text-xs text-muted-foreground">
+                      Score: {result.score}{result.location && ` · ${result.location}`}
+                    </p>
                   </li>
                 );
               })}
