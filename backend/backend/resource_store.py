@@ -23,6 +23,7 @@ class Resource:
     chunks_done: int = 0
     chunks_total: int = 0
     error_message: str | None = None
+    current_step: str | None = None
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -40,7 +41,8 @@ CREATE TABLE IF NOT EXISTS resources (
     embedder_id       TEXT,
     chunks_done       INTEGER NOT NULL DEFAULT 0,
     chunks_total      INTEGER NOT NULL DEFAULT 0,
-    error_message     TEXT
+    error_message     TEXT,
+    current_step      TEXT
 )
 """
 
@@ -51,6 +53,7 @@ _MIGRATIONS = [
     "ALTER TABLE resources ADD COLUMN chunks_total INTEGER NOT NULL DEFAULT 0",
     "ALTER TABLE resources ADD COLUMN error_message TEXT",
     "ALTER TABLE chunks ADD COLUMN location TEXT",
+    "ALTER TABLE resources ADD COLUMN current_step TEXT",
 ]
 
 _CREATE_CHUNKS = """
@@ -121,13 +124,13 @@ class ResourceStore:
             indexing_status=row[3], citation_metadata=json.loads(row[4]),
             created_at=row[5], chunker_id=row[6], embedder_id=row[7],
             chunks_done=row[8] or 0, chunks_total=row[9] or 0,
-            error_message=row[10],
+            error_message=row[10], current_step=row[11],
         )
 
     def _select_resource(self, con: sqlite3.Connection, where: str, params: tuple) -> Resource | None:
         row = con.execute(
             "SELECT id, content_hash, resource_type, indexing_status, citation_metadata,"
-            " created_at, chunker_id, embedder_id, chunks_done, chunks_total, error_message"
+            " created_at, chunker_id, embedder_id, chunks_done, chunks_total, error_message, current_step"
             f" FROM resources WHERE {where}",
             params,
         ).fetchone()
@@ -172,10 +175,26 @@ class ResourceStore:
         error_message: str | None = None,
     ) -> None:
         con = self._connect()
+        if status in ("ready", "failed"):
+            con.execute(
+                "UPDATE resources SET indexing_status=?, chunker_id=?, embedder_id=?,"
+                " chunks_done=?, chunks_total=?, error_message=?, current_step=NULL WHERE id=?",
+                (status, chunker_id, embedder_id, chunks_done, chunks_total, error_message, resource_id),
+            )
+        else:
+            con.execute(
+                "UPDATE resources SET indexing_status=?, chunker_id=?, embedder_id=?,"
+                " chunks_done=?, chunks_total=?, error_message=? WHERE id=?",
+                (status, chunker_id, embedder_id, chunks_done, chunks_total, error_message, resource_id),
+            )
+        con.commit()
+        con.close()
+
+    def update_step(self, resource_id: str, step: str | None) -> None:
+        con = self._connect()
         con.execute(
-            "UPDATE resources SET indexing_status=?, chunker_id=?, embedder_id=?,"
-            " chunks_done=?, chunks_total=?, error_message=? WHERE id=?",
-            (status, chunker_id, embedder_id, chunks_done, chunks_total, error_message, resource_id),
+            "UPDATE resources SET current_step=? WHERE id=?",
+            (step, resource_id),
         )
         con.commit()
         con.close()
@@ -206,6 +225,7 @@ class ResourceStore:
             "chunks_done": resource.chunks_done,
             "chunks_total": resource.chunks_total,
             "error_message": resource.error_message,
+            "current_step": resource.current_step,
         }
 
     def store_chunks_and_embeddings(
@@ -239,7 +259,7 @@ class ResourceStore:
             )
         con.execute(
             "UPDATE resources SET indexing_status='ready', chunker_id=?, embedder_id=?,"
-            " chunks_done=?, chunks_total=? WHERE id=?",
+            " chunks_done=?, chunks_total=?, current_step=NULL WHERE id=?",
             (chunker_id, embedder_id, len(chunks), len(chunks), resource_id),
         )
         con.commit()

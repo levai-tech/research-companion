@@ -79,9 +79,11 @@ class IngestionService:
         embedder: Embedder,
     ) -> None:
         try:
+            self._store.update_step(resource_id, "chunking")
             chunks = chunker.chunk(text)
             total = len(chunks)
             self._store.update_status(resource_id, "indexing", chunks_total=total)
+            self._store.update_step(resource_id, "embedding")
             all_embeddings: list[list[float]] = []
             for i in range(0, total, self._EMBED_BATCH):
                 batch = chunks[i : i + self._EMBED_BATCH]
@@ -100,6 +102,8 @@ class IngestionService:
         if src is None or not src.exists():
             self._store.update_status(resource_id, "failed", error_message="source file not found")
             return
+        self._store.update_status(resource_id, "indexing")
+        self._store.update_step(resource_id, "extracting")
         raw = src.read_bytes()
         text, citation = extract_file(raw, filename)
         if citation:
@@ -113,6 +117,8 @@ class IngestionService:
     def run_url_pipeline(self, resource_id: str, url: str) -> None:
         from backend.extractor import extract_url
 
+        self._store.update_status(resource_id, "indexing")
+        self._store.update_step(resource_id, "extracting")
         try:
             resp = httpx.get(url, follow_redirects=True, timeout=30)
             resp.raise_for_status()

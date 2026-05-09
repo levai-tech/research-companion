@@ -139,6 +139,27 @@ def test_run_file_pipeline_uses_semantic_ingester(tmp_path):
     assert status["indexing_status"] == "ready"
 
 
+# ── Slice 9: ingest() sets chunking then embedding steps ─────────────────────
+
+def test_ingest_sets_chunking_and_embedding_steps(store):
+    resource = store.get_or_create("hash-steps-si", "Book")
+    ingester = SemanticIngester(model="anthropic/claude-haiku-4-5", api_key="sk-test")
+
+    step_calls = []
+    original_update_step = store.update_step
+    def capture_step(rid, step):
+        step_calls.append(step)
+        return original_update_step(rid, step)
+
+    with patch("backend.semantic_ingester.httpx.post", return_value=_fake_openrouter_response("Chunk text.")), \
+         patch.object(store, "update_step", side_effect=capture_step):
+        ingester.ingest(resource.id, [(1, "Page text.")], store, FakeEmbedder())
+
+    assert step_calls == ["chunking", "embedding"]
+    status = store.get_status(resource.id)
+    assert status["current_step"] is None  # cleared on ready
+
+
 # ── Slice 8: run_url_pipeline passes single page to SemanticIngester ─────────
 
 def test_run_url_pipeline_passes_single_page_to_semantic_ingester(tmp_path):

@@ -82,3 +82,36 @@ async def test_delete_nonexistent_resource_returns_404(tmp_app, project):
         )
 
     assert response.status_code == 404
+
+
+# ── Behavior 3: GET /projects/{id}/resources/{res_id}/status ─────────────────
+
+async def test_get_status_includes_current_step(tmp_app, project, store):
+    resource = store.get_or_create("hash-step-api", "Book")
+    store.attach(project.id, resource.id)
+
+    transport = httpx.ASGITransport(app=tmp_app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get(
+            f"/projects/{project.id}/resources/{resource.id}/status"
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert "current_step" in body
+    assert body["current_step"] is None
+
+
+async def test_get_status_current_step_reflects_update_step(tmp_app, project, store):
+    resource = store.get_or_create("hash-step-api2", "Book")
+    store.attach(project.id, resource.id)
+    store.update_step(resource.id, "extracting")
+
+    transport = httpx.ASGITransport(app=tmp_app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get(
+            f"/projects/{project.id}/resources/{resource.id}/status"
+        )
+
+    assert response.status_code == 200
+    assert response.json()["current_step"] == "extracting"

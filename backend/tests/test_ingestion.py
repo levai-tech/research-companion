@@ -185,3 +185,71 @@ def test_ingestion_run_sets_failed_on_embedder_error(service, store):
     status = store.get_status(resource.id)
     assert status["indexing_status"] == "failed"
     assert status["error_message"]
+
+
+# ── Slice 5c: run_ingestion step transitions ──────────────────────────────────
+
+def test_run_ingestion_sets_chunking_then_embedding_steps(store):
+    resource = store.get_or_create("hash-steps-ri", "Book")
+    service = IngestionService(store=store, chunker=FakeChunker(), embedder=FakeEmbedder())
+
+    step_calls = []
+    original_update_step = store.update_step
+    def capture_step(rid, step):
+        step_calls.append(step)
+        return original_update_step(rid, step)
+
+    from unittest.mock import patch
+    with patch.object(store, "update_step", side_effect=capture_step):
+        service.run_ingestion(resource.id, "some text", FakeChunker(), FakeEmbedder())
+
+    assert step_calls == ["chunking", "embedding"]
+
+
+# ── Slice 5d: run_file_pipeline extracting step ───────────────────────────────
+
+def test_run_file_pipeline_sets_extracting_step(store):
+    service = IngestionService(store=store, chunker=FakeChunker(), embedder=FakeEmbedder())
+    content = b"Hello world text."
+    result = service.accept_file(project_id="p1", content=content, resource_type="Book")
+    resource_id = result["resource_id"]
+
+    step_calls = []
+    original_update_step = store.update_step
+    def capture_step(rid, step):
+        step_calls.append(step)
+        return original_update_step(rid, step)
+
+    from unittest.mock import patch
+    with patch.object(store, "update_step", side_effect=capture_step), \
+         patch.object(service, "run_ingestion"):
+        service.run_file_pipeline(resource_id, "test.txt")
+
+    assert step_calls[0] == "extracting"
+
+
+# ── Slice 5e: run_url_pipeline extracting step ────────────────────────────────
+
+def test_run_url_pipeline_sets_extracting_step(store):
+    service = IngestionService(store=store, chunker=FakeChunker(), embedder=FakeEmbedder())
+    result = service.accept_url(project_id="p1", url="https://example.com/page")
+    resource_id = result["resource_id"]
+
+    step_calls = []
+    original_update_step = store.update_step
+    def capture_step(rid, step):
+        step_calls.append(step)
+        return original_update_step(rid, step)
+
+    fake_resp = __import__("unittest.mock", fromlist=["MagicMock"]).MagicMock()
+    fake_resp.text = "<html><body><p>Article text.</p></body></html>"
+    fake_resp.raise_for_status = lambda: None
+
+    from unittest.mock import patch
+    with patch.object(store, "update_step", side_effect=capture_step), \
+         patch("backend.ingestion.httpx.get", return_value=fake_resp), \
+         patch("backend.extractor.extract_url", return_value=("Article text.", {})), \
+         patch.object(service, "run_ingestion"):
+        service.run_url_pipeline(resource_id, "https://example.com/page")
+
+    assert step_calls[0] == "extracting"

@@ -296,3 +296,54 @@ def test_search_results_location_is_none_when_not_stored(store):
 
     assert len(results) == 1
     assert results[0]["location"] is None
+
+
+# ── Behavior 9: current_step ──────────────────────────────────────────────────
+
+def test_schema_resources_has_current_step_column(store, tmp_path):
+    con = sqlite3.connect(tmp_path / "resources.db")
+    cols = {r[1] for r in con.execute("PRAGMA table_info(resources)").fetchall()}
+    con.close()
+    assert "current_step" in cols
+
+
+def test_get_status_includes_current_step_as_null_initially(store):
+    resource = store.get_or_create("hash-step-init", "Book")
+    status = store.get_status(resource.id)
+    assert "current_step" in status
+    assert status["current_step"] is None
+
+
+def test_update_step_persists_current_step(store):
+    resource = store.get_or_create("hash-step-set", "Book")
+    store.update_step(resource.id, "extracting")
+    status = store.get_status(resource.id)
+    assert status["current_step"] == "extracting"
+
+
+def test_update_step_can_clear_current_step(store):
+    resource = store.get_or_create("hash-step-clear", "Book")
+    store.update_step(resource.id, "extracting")
+    store.update_step(resource.id, None)
+    status = store.get_status(resource.id)
+    assert status["current_step"] is None
+
+
+def test_update_status_failed_clears_current_step(store):
+    resource = store.get_or_create("hash-step-failed", "Book")
+    store.update_step(resource.id, "chunking")
+    store.update_status(resource.id, "failed", error_message="boom")
+    status = store.get_status(resource.id)
+    assert status["current_step"] is None
+    assert status["indexing_status"] == "failed"
+
+
+def test_store_chunks_and_embeddings_clears_current_step(store):
+    resource = store.get_or_create("hash-step-ready", "Book")
+    store.update_step(resource.id, "embedding")
+    store.store_chunks_and_embeddings(
+        resource.id, ["chunk"], [[0.1] * 384], "c", "e"
+    )
+    status = store.get_status(resource.id)
+    assert status["current_step"] is None
+    assert status["indexing_status"] == "ready"

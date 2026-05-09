@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import time
 from dataclasses import dataclass
 
 import httpx
@@ -42,6 +43,7 @@ class SemanticIngester:
             return
         try:
             store.update_status(resource_id, "indexing")
+            store.update_step(resource_id, "chunking")
             all_results: list[ChunkResult] = []
             stride = _BATCH_SIZE - _OVERLAP
             for i in range(0, len(pages), stride):
@@ -57,6 +59,7 @@ class SemanticIngester:
 
             texts = [r.text for r in all_results]
             locations = [r.location for r in all_results]
+            store.update_step(resource_id, "embedding")
             embeddings = embedder.embed(texts)
             store.store_chunks_and_embeddings(
                 resource_id, texts, embeddings, self.id, embedder.id, locations
@@ -85,19 +88,28 @@ class SemanticIngester:
             "---\n"
             f"{pages_text}"
         )
-        try:
-            resp = httpx.post(
-                _OPENROUTER_URL,
-                headers={"Authorization": f"Bearer {self._api_key}"},
-                json={"model": self._model, "messages": [{"role": "user", "content": prompt}]},
-                timeout=120.0,
-            )
-            resp.raise_for_status()
-        except httpx.HTTPStatusError as exc:
-            raise RuntimeError(
-                "Semantic ingestion requires Claude API — check your OpenRouter API key"
-            ) from exc
-        return resp.json()["choices"][0]["message"]["content"]
+        attempts = 3
+        for attempt in range(attempts):
+            try:
+                resp = httpx.post(
+                    _OPENROUTER_URL,
+                    headers={"Authorization": f"Bearer {self._api_key}"},
+                    json={"model": self._model, "messages": [{"role": "user", "content": prompt}]},
+                    timeout=120.0,
+                )
+                resp.raise_for_status()
+                return resp.json()["choices"][0]["message"]["content"]
+            except httpx.HTTPStatusError as exc:
+                raise RuntimeError(
+                    "Semantic ingestion requires Claude API — check your OpenRouter API key"
+                ) from exc
+            except httpx.TransportError as exc:
+                if attempt < attempts - 1:
+                    time.sleep(2 ** attempt)
+                else:
+                    raise RuntimeError(
+                        f"OpenRouter connection dropped after {attempts} attempts: {exc}"
+                    ) from exc
 
     @staticmethod
     def _parse_response(response: str, overlap_page_nums: set[int]) -> list[ChunkResult]:
