@@ -13,6 +13,20 @@ interface StatusResponse {
   chunks_done: number;
   chunks_total: number;
   error_message: string | null;
+  current_step: string | null;
+}
+
+function stepLabel(step: string, chunksDone: number, chunksTotal: number): string {
+  if (step === "extracting") return "Extracting…";
+  if (step === "chunking") return "Chunking…";
+  if (step.startsWith("rate_limited")) {
+    const seconds = parseInt(step.split(":")[1], 10);
+    return !isNaN(seconds) && seconds > 0
+      ? `API limit reached — retrying in ${seconds}s…`
+      : "API limit reached — waiting to retry…";
+  }
+  if (chunksTotal > 0) return `Embedding ${chunksDone} / ${chunksTotal}`;
+  return "Embedding…";
 }
 
 interface Props {
@@ -72,18 +86,21 @@ export default function JobTray({ projectId }: Props) {
                 chunksDone: status.chunks_done,
                 chunksTotal: status.chunks_total,
                 completedAt: Date.now(),
+                currentStep: null,
               });
               setTimeout(() => dismissJob(job.resourceId), 5000);
             } else if (status.indexing_status === "failed") {
               updateJob(job.resourceId, {
                 status: "failed",
                 errorMessage: status.error_message,
+                currentStep: null,
               });
             } else {
               updateJob(job.resourceId, {
                 status: status.indexing_status as "queued" | "indexing",
                 chunksDone: status.chunks_done,
                 chunksTotal: status.chunks_total,
+                currentStep: status.current_step,
               });
             }
           });
@@ -141,6 +158,15 @@ export default function JobTray({ projectId }: Props) {
           )}
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium truncate">{job.title}</p>
+            {(job.status === "queued" || job.status === "indexing") &&
+              job.currentStep && (
+                <p
+                  data-testid="step-label"
+                  className="text-xs text-muted-foreground"
+                >
+                  {stepLabel(job.currentStep, job.chunksDone, job.chunksTotal)}
+                </p>
+              )}
             {(job.status === "queued" || job.status === "indexing") && (
               <progress
                 aria-valuenow={job.chunksDone}

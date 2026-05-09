@@ -19,6 +19,7 @@ function makeJob(overrides: Partial<JobEntry> = {}): JobEntry {
     chunksTotal: 10,
     errorMessage: null,
     completedAt: null,
+    currentStep: null,
     ...overrides,
   };
 }
@@ -77,6 +78,100 @@ it("shows an animated spinner for queued and indexing jobs", async () => {
 
   await screen.findByText("My Book");
   expect(screen.getByLabelText("indexing")).toBeInTheDocument();
+});
+
+// ── Behavior 9: step label absent when currentStep is null ───────────────────
+
+it("does not render a step label when currentStep is null", async () => {
+  global.fetch = mockEmptyList();
+  useJobTrayStore.setState({
+    jobs: { "res-1": makeJob({ currentStep: null }) },
+  });
+
+  render(<JobTray projectId="proj-1" />);
+
+  await screen.findByText("My Book");
+  expect(screen.queryByTestId("step-label")).not.toBeInTheDocument();
+});
+
+// ── Behavior 10: step label shows Extracting… ────────────────────────────────
+
+it("shows Extracting… label when currentStep is extracting", async () => {
+  global.fetch = mockEmptyList();
+  useJobTrayStore.setState({
+    jobs: { "res-1": makeJob({ currentStep: "extracting", chunksDone: 0, chunksTotal: 0 }) },
+  });
+
+  render(<JobTray projectId="proj-1" />);
+
+  expect(await screen.findByTestId("step-label")).toHaveTextContent("Extracting…");
+});
+
+// ── Behavior 11: step label shows Chunking… ──────────────────────────────────
+
+it("shows Chunking… label when currentStep is chunking", async () => {
+  global.fetch = mockEmptyList();
+  useJobTrayStore.setState({
+    jobs: { "res-1": makeJob({ currentStep: "chunking", chunksDone: 0, chunksTotal: 0 }) },
+  });
+
+  render(<JobTray projectId="proj-1" />);
+
+  expect(await screen.findByTestId("step-label")).toHaveTextContent("Chunking…");
+});
+
+// ── Behavior 12: step label shows Embedding… when no chunks yet ──────────────
+
+it("shows Embedding… label when currentStep is embedding but no chunks yet", async () => {
+  global.fetch = mockEmptyList();
+  useJobTrayStore.setState({
+    jobs: { "res-1": makeJob({ currentStep: "embedding", chunksDone: 0, chunksTotal: 0 }) },
+  });
+
+  render(<JobTray projectId="proj-1" />);
+
+  expect(await screen.findByTestId("step-label")).toHaveTextContent("Embedding…");
+});
+
+// ── Behavior 13: step label shows Embedding N / M when chunks available ───────
+
+it("shows Embedding N / M label when currentStep is embedding and chunks are available", async () => {
+  global.fetch = mockEmptyList();
+  useJobTrayStore.setState({
+    jobs: { "res-1": makeJob({ currentStep: "embedding", chunksDone: 3, chunksTotal: 12 }) },
+  });
+
+  render(<JobTray projectId="proj-1" />);
+
+  expect(await screen.findByTestId("step-label")).toHaveTextContent("Embedding 3 / 12");
+});
+
+// ── Behavior 14: rate-limited step label ─────────────────────────────────────
+
+it("shows countdown when currentStep is rate_limited:N", async () => {
+  global.fetch = mockEmptyList();
+  useJobTrayStore.setState({
+    jobs: { "res-1": makeJob({ currentStep: "rate_limited:45", chunksDone: 0, chunksTotal: 0 }) },
+  });
+
+  render(<JobTray projectId="proj-1" />);
+
+  expect(await screen.findByTestId("step-label")).toHaveTextContent(
+    "API limit reached — retrying in 45s…",
+  );
+});
+
+it("shows generic wait message when rate_limited has no countdown", async () => {
+  global.fetch = mockEmptyList();
+  useJobTrayStore.setState({
+    jobs: { "res-1": makeJob({ currentStep: "rate_limited", chunksDone: 0, chunksTotal: 0 }) },
+  });
+
+  render(<JobTray projectId="proj-1" />);
+
+  expect(await screen.findByTestId("step-label")).toHaveTextContent(
+    "API limit reached — waiting to retry…",
+  );
 });
 
 // ── Behavior 8: seed from resource list on mount ─────────────────────────────
@@ -213,6 +308,39 @@ describe("polling", () => {
     expect(global.fetch).toHaveBeenCalledWith(
       "http://127.0.0.1:8000/projects/proj-1/resources/res-1/status",
     );
+  });
+
+  it("propagates current_step from status response to step label", async () => {
+    vi.useFakeTimers();
+    global.fetch = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve([]),
+      } as Response)
+      .mockResolvedValue({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            indexing_status: "indexing",
+            chunks_done: 0,
+            chunks_total: 0,
+            error_message: null,
+            current_step: "extracting",
+          }),
+      } as Response);
+
+    useJobTrayStore.setState({
+      jobs: { "res-1": makeJob({ currentStep: null }) },
+    });
+
+    render(<JobTray projectId="proj-1" />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(2000);
+    });
+
+    expect(screen.getByTestId("step-label")).toHaveTextContent("Extracting…");
   });
 
   it("progress bar updates when the store job is updated", async () => {

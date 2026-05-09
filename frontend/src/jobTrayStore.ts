@@ -9,6 +9,7 @@ export interface JobEntry {
   chunksTotal: number;
   errorMessage: string | null;
   completedAt: number | null;
+  currentStep: string | null;
 }
 
 interface JobTrayStore {
@@ -35,6 +36,7 @@ export const useJobTrayStore = create<JobTrayStore>((set) => ({
             chunksTotal: 0,
             errorMessage: null,
             completedAt: null,
+            currentStep: null,
           },
         },
       };

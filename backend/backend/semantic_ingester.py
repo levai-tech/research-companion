@@ -54,7 +54,7 @@ class SemanticIngester:
                     else {pages[start][0]} if i > 0
                     else set()
                 )
-                response_text = self._call_openrouter(batch, overlap_page_nums)
+                response_text = self._call_openrouter(batch, overlap_page_nums, resource_id, store)
                 all_results.extend(self._parse_response(response_text, overlap_page_nums))
 
             texts = [r.text for r in all_results]
@@ -67,7 +67,14 @@ class SemanticIngester:
         except Exception as exc:
             store.update_status(resource_id, "failed", error_message=str(exc))
 
-    def _call_openrouter(self, batch: list[tuple[int, str]], overlap_page_nums: set[int]) -> str:
+    def _call_openrouter(
+        self,
+        batch: list[tuple[int, str]],
+        overlap_page_nums: set[int],
+        resource_id: str,
+        store: "ResourceStore",
+    ) -> str:
+        from backend.resource_store import ResourceStore  # local to avoid circular
         pages_text = "\n\n".join(f"[Page {n}]\n{text}" for n, text in batch)
         if overlap_page_nums:
             page_list = ", ".join(f"p. {n}" for n in sorted(overlap_page_nums))
@@ -88,8 +95,9 @@ class SemanticIngester:
             "---\n"
             f"{pages_text}"
         )
-        attempts = 3
-        for attempt in range(attempts):
+        transport_fails = 0
+        _MAX_TRANSPORT_ATTEMPTS = 3
+        while True:
             try:
                 resp = httpx.post(
                     _OPENROUTER_URL,
@@ -97,19 +105,38 @@ class SemanticIngester:
                     json={"model": self._model, "messages": [{"role": "user", "content": prompt}]},
                     timeout=120.0,
                 )
+            except httpx.TransportError as exc:
+                transport_fails += 1
+                if transport_fails < _MAX_TRANSPORT_ATTEMPTS:
+                    time.sleep(2 ** transport_fails)
+                    continue
+                raise RuntimeError(
+                    f"OpenRouter connection dropped after {_MAX_TRANSPORT_ATTEMPTS} attempts: {exc}"
+                ) from exc
+
+            if resp.status_code == 429:
+                remaining = int(resp.headers.get("Retry-After", 60))
+                while remaining > 0:
+                    store.update_step(resource_id, f"rate_limited:{remaining}")
+                    time.sleep(1)
+                    remaining -= 1
+                store.update_step(resource_id, "chunking")
+                transport_fails = 0
+                continue
+
+            try:
                 resp.raise_for_status()
-                return resp.json()["choices"][0]["message"]["content"]
             except httpx.HTTPStatusError as exc:
                 raise RuntimeError(
-                    "Semantic ingestion requires Claude API — check your OpenRouter API key"
+                    f"OpenRouter error {resp.status_code}: {resp.text[:300]}"
                 ) from exc
-            except httpx.TransportError as exc:
-                if attempt < attempts - 1:
-                    time.sleep(2 ** attempt)
-                else:
-                    raise RuntimeError(
-                        f"OpenRouter connection dropped after {attempts} attempts: {exc}"
-                    ) from exc
+
+            try:
+                return resp.json()["choices"][0]["message"]["content"]
+            except (KeyError, IndexError) as exc:
+                raise RuntimeError(
+                    f"Unexpected OpenRouter response (missing 'choices'): {resp.text[:300]}"
+                ) from exc
 
     @staticmethod
     def _parse_response(response: str, overlap_page_nums: set[int]) -> list[ChunkResult]:

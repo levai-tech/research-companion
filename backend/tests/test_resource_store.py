@@ -121,6 +121,43 @@ def test_get_or_create_does_not_insert_duplicate_row(store, tmp_path):
     assert count == 1
 
 
+# ── Behavior 3b: get_or_create resets failed resources ───────────────────────
+
+def test_get_or_create_resets_failed_resource_to_queued(store):
+    resource = store.get_or_create("abc-fail", "Book")
+    store.update_status(resource.id, "failed", error_message="something went wrong")
+
+    reset = store.get_or_create("abc-fail", "Book")
+
+    assert reset.id == resource.id
+    assert reset.indexing_status == "queued"
+    status = store.get_status(resource.id)
+    assert status["error_message"] is None
+    assert status["indexing_status"] == "queued"
+
+
+def test_get_or_create_clears_partial_chunks_on_failed_reset(store):
+    import sqlite3 as _sqlite3
+    from pathlib import Path
+    resource = store.get_or_create("abc-partial", "Book")
+    # Simulate partial ingestion leaving chunks behind
+    texts = ["chunk one", "chunk two"]
+    embeddings = [[0.1] * 384, [0.2] * 384]
+    store.update_status(resource.id, "indexing", chunks_total=2)
+    store.store_chunks_and_embeddings(resource.id, texts, embeddings, "chunker-v1", "embedder-v1")
+    store.update_status(resource.id, "failed", error_message="embedding blew up")
+
+    store.get_or_create("abc-partial", "Book")
+
+    db_path = store._db_path
+    con = _sqlite3.connect(db_path)
+    chunk_count = con.execute(
+        "SELECT COUNT(*) FROM chunks WHERE resource_id=?", (resource.id,)
+    ).fetchone()[0]
+    con.close()
+    assert chunk_count == 0
+
+
 # ── Behavior 4: attach ────────────────────────────────────────────────────────
 
 def test_attach_writes_project_resources_row_in_per_project_db(store, tmp_path):

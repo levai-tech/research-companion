@@ -136,6 +136,25 @@ class ResourceStore:
         ).fetchone()
         return self._row_to_resource(row) if row else None
 
+    def _reset_failed(self, resource_id: str) -> None:
+        con = self._connect()
+        chunk_ids = [
+            r[0] for r in con.execute(
+                "SELECT id FROM chunks WHERE resource_id = ?", (resource_id,)
+            ).fetchall()
+        ]
+        for chunk_id in chunk_ids:
+            con.execute("DELETE FROM embeddings WHERE chunk_id = ?", (chunk_id,))
+        con.execute("DELETE FROM chunks WHERE resource_id = ?", (resource_id,))
+        con.execute(
+            "UPDATE resources SET indexing_status='queued', error_message=NULL,"
+            " current_step=NULL, chunks_done=0, chunks_total=0,"
+            " chunker_id=NULL, embedder_id=NULL WHERE id=?",
+            (resource_id,),
+        )
+        con.commit()
+        con.close()
+
     def get_or_create(
         self,
         content_hash: str,
@@ -146,6 +165,16 @@ class ResourceStore:
         existing = self._select_resource(con, "content_hash = ?", (content_hash,))
         if existing:
             con.close()
+            if existing.indexing_status == "failed":
+                self._reset_failed(existing.id)
+                return Resource(
+                    id=existing.id,
+                    content_hash=existing.content_hash,
+                    resource_type=existing.resource_type,
+                    indexing_status="queued",
+                    citation_metadata=existing.citation_metadata,
+                    created_at=existing.created_at,
+                )
             return existing
 
         resource_id = str(uuid.uuid4())
