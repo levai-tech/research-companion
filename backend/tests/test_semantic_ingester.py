@@ -199,8 +199,8 @@ def test_ingest_sets_rate_limited_step_while_waiting(store):
 
     rate_limited_steps = [i for i, s in enumerate(steps) if s and s.startswith("rate_limited:")]
     assert rate_limited_steps, "expected at least one rate_limited:<n> step"
-    # step returns to "chunking" after the countdown, then moves to "embedding"
-    assert steps[rate_limited_steps[-1] + 1] == "chunking"
+    # step resumes to the batch step after the countdown, then moves to "embedding"
+    assert steps[rate_limited_steps[-1] + 1].startswith("chunking:")
 
 
 # ── Slice 9: run_file_pipeline uses SemanticIngester ─────────────────────────
@@ -240,7 +240,7 @@ def test_ingest_sets_chunking_and_embedding_steps(store):
          patch.object(store, "update_step", side_effect=capture_step):
         ingester.ingest(resource.id, [(1, "Page text.")], store, FakeEmbedder())
 
-    assert step_calls == ["chunking", "embedding"]
+    assert step_calls == ["chunking:1/1", "embedding"]
     status = store.get_status(resource.id)
     assert status["current_step"] is None  # cleared on ready
 

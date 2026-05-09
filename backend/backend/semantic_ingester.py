@@ -43,10 +43,12 @@ class SemanticIngester:
             return
         try:
             store.update_status(resource_id, "indexing")
-            store.update_step(resource_id, "chunking")
             all_results: list[ChunkResult] = []
             stride = _BATCH_SIZE - _OVERLAP
-            for i in range(0, len(pages), stride):
+            total_batches = max(1, -(-len(pages) // stride))  # ceil division
+            for batch_num, i in enumerate(range(0, len(pages), stride), start=1):
+                batch_step = f"chunking:{batch_num}/{total_batches}"
+                store.update_step(resource_id, batch_step)
                 start = i
                 batch = pages[start : start + _BATCH_SIZE]
                 overlap_page_nums: set[int] = (
@@ -54,7 +56,7 @@ class SemanticIngester:
                     else {pages[start][0]} if i > 0
                     else set()
                 )
-                response_text = self._call_openrouter(batch, overlap_page_nums, resource_id, store)
+                response_text = self._call_openrouter(batch, overlap_page_nums, resource_id, store, batch_step)
                 all_results.extend(self._parse_response(response_text, overlap_page_nums))
 
             texts = [r.text for r in all_results]
@@ -73,6 +75,7 @@ class SemanticIngester:
         overlap_page_nums: set[int],
         resource_id: str,
         store: "ResourceStore",
+        resume_step: str = "chunking",
     ) -> str:
         from backend.resource_store import ResourceStore  # local to avoid circular
         pages_text = "\n\n".join(f"[Page {n}]\n{text}" for n, text in batch)
@@ -120,7 +123,7 @@ class SemanticIngester:
                     store.update_step(resource_id, f"rate_limited:{remaining}")
                     time.sleep(1)
                     remaining -= 1
-                store.update_step(resource_id, "chunking")
+                store.update_step(resource_id, resume_step)
                 transport_fails = 0
                 continue
 

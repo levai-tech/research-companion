@@ -18,7 +18,10 @@ interface StatusResponse {
 
 function stepLabel(step: string, chunksDone: number, chunksTotal: number): string {
   if (step === "extracting") return "Extracting…";
-  if (step === "chunking") return "Chunking…";
+  if (step.startsWith("chunking")) {
+    const match = step.match(/^chunking:(\d+)\/(\d+)$/);
+    return match ? `Chunking ${match[1]} / ${match[2]}…` : "Chunking…";
+  }
   if (step.startsWith("rate_limited")) {
     const seconds = parseInt(step.split(":")[1], 10);
     return !isNaN(seconds) && seconds > 0

@@ -109,7 +109,7 @@ it("shows Extracting… label when currentStep is extracting", async () => {
 
 // ── Behavior 11: step label shows Chunking… ──────────────────────────────────
 
-it("shows Chunking… label when currentStep is chunking", async () => {
+it("shows Chunking… label when currentStep is bare chunking", async () => {
   global.fetch = mockEmptyList();
   useJobTrayStore.setState({
     jobs: { "res-1": makeJob({ currentStep: "chunking", chunksDone: 0, chunksTotal: 0 }) },
@@ -118,6 +118,17 @@ it("shows Chunking… label when currentStep is chunking", async () => {
   render(<JobTray projectId="proj-1" />);
 
   expect(await screen.findByTestId("step-label")).toHaveTextContent("Chunking…");
+});
+
+it("shows Chunking N / M… label when currentStep includes batch progress", async () => {
+  global.fetch = mockEmptyList();
+  useJobTrayStore.setState({
+    jobs: { "res-1": makeJob({ currentStep: "chunking:2/5", chunksDone: 0, chunksTotal: 0 }) },
+  });
+
+  render(<JobTray projectId="proj-1" />);
+
+  expect(await screen.findByTestId("step-label")).toHaveTextContent("Chunking 2 / 5…");
 });
 
 // ── Behavior 12: step label shows Embedding… when no chunks yet ──────────────
