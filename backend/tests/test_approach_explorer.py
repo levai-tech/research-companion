@@ -3,6 +3,7 @@ import httpx
 from unittest.mock import AsyncMock, patch
 
 from backend.main import create_app
+from backend.approach_explorer import _extract_json_array
 
 
 @pytest.fixture
@@ -65,3 +66,36 @@ async def test_propose_routes_via_approach_explorer_role(app):
     mock_llm.assert_awaited_once()
     _, kwargs = mock_llm.call_args
     assert kwargs.get("role") == "approach_explorer" or mock_llm.call_args.args[1:] == ("approach_explorer",)
+
+
+# ── Unit tests: _extract_json_array ──────────────────────────────────────────
+
+_ARRAY_JSON = '[{"title": "A", "description": "Desc A"}, {"title": "B", "description": "Desc B"}]'
+
+
+def test_extract_json_array_bare():
+    result = _extract_json_array(_ARRAY_JSON)
+    assert len(result) == 2
+    assert result[0]["title"] == "A"
+
+
+def test_extract_json_array_fenced():
+    fenced = f"```json\n{_ARRAY_JSON}\n```"
+    result = _extract_json_array(fenced)
+    assert len(result) == 2
+
+
+def test_extract_json_array_prose_wrapped():
+    prose = f"Here are three approaches:\n\n{_ARRAY_JSON}\n\nLet me know which resonates."
+    result = _extract_json_array(prose)
+    assert len(result) == 2
+
+
+def test_extract_json_array_raises_on_empty():
+    with pytest.raises(RuntimeError, match="unexpected response"):
+        _extract_json_array("")
+
+
+def test_extract_json_array_raises_on_plain_text():
+    with pytest.raises(RuntimeError, match="unexpected response"):
+        _extract_json_array("Sorry, I cannot help with that.")

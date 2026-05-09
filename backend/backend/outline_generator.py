@@ -1,9 +1,33 @@
 import json
+import re
 from typing import Any
 
 from backend.llm import openrouter_post
 from backend.model_router import ModelRouter
 from backend.settings import Settings
+
+def _extract_json_array(content: str) -> list[dict[str, Any]]:
+    """Extract a JSON array from model output, tolerating markdown fences and prose wrappers."""
+    candidates: list[str] = [content]
+
+    fence_match = re.search(r"```(?:json)?\s*(\[.*?\])\s*```", content, re.DOTALL | re.IGNORECASE)
+    if fence_match:
+        candidates.append(fence_match.group(1))
+
+    bracket_match = re.search(r"\[.*\]", content, re.DOTALL)
+    if bracket_match:
+        candidates.append(bracket_match.group(0))
+
+    for candidate in candidates:
+        try:
+            parsed = json.loads(candidate.strip())
+            if isinstance(parsed, list):
+                return parsed
+        except (json.JSONDecodeError, ValueError):
+            continue
+
+    raise RuntimeError("The AI returned an unexpected response for the Outline — try again.")
+
 
 _OUTLINE_PROMPT = """You are an Outline Architect helping a writer build a detailed chapter outline.
 
@@ -55,4 +79,4 @@ async def generate_outline(
     )
 
     content: str = response.json()["choices"][0]["message"]["content"]
-    return json.loads(content)
+    return _extract_json_array(content)

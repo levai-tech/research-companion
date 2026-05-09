@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useAppStore } from "../store";
 import type { Project } from "../hooks/useProjects";
 
@@ -26,6 +26,7 @@ export default function Interview({ onProjectCreated }: InterviewProps) {
   const [isFinishing, setIsFinishing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const initialized = useRef(false);
+  const bottomRef = useRef<HTMLDivElement>(null);
 
   async function sendMessages(history: ChatMessage[]) {
     setIsSending(true);
@@ -67,6 +68,10 @@ export default function Interview({ onProjectCreated }: InterviewProps) {
     sendMessages([]);
   }, [port]);
 
+  useLayoutEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
   async function handleSend() {
     if (!input.trim() || isSending) return;
     const userMsg: ChatMessage = { role: "user", content: input.trim() };
@@ -106,13 +111,13 @@ export default function Interview({ onProjectCreated }: InterviewProps) {
   const hasStarted = messages.some((m) => m.role === "assistant");
 
   return (
-    <div className="flex flex-col gap-4 p-6">
-      {error && (
-        <div className="rounded border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-          {error}
-        </div>
-      )}
-      <div className="flex flex-col gap-2">
+    <div className="flex flex-col h-full">
+      <div className="flex-1 min-h-0 overflow-y-auto p-6 flex flex-col gap-2">
+        {error && (
+          <div className="rounded border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+            {error}
+          </div>
+        )}
         {messages.map((m, i) => (
           <div key={i} className={m.role === "user" ? "text-right" : "text-left"}>
             <span className="inline-block rounded px-3 py-2 text-sm">
@@ -120,26 +125,24 @@ export default function Interview({ onProjectCreated }: InterviewProps) {
             </span>
           </div>
         ))}
+        <div ref={bottomRef} />
       </div>
 
-      <div className="flex gap-2">
-        {!isReady && (
-          <input
-            className="flex-1 rounded border px-3 py-2"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleSend()}
-          />
-        )}
-        {!isReady && (
-          <button
-            className="rounded bg-primary px-4 py-2 text-primary-foreground"
-            onClick={handleSend}
-            disabled={isSending}
-          >
-            Send
-          </button>
-        )}
+      <div className="flex gap-2 border-t px-6 py-4">
+        <input
+          className="flex-1 rounded border px-3 py-2"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && handleSend()}
+          disabled={isSending}
+        />
+        <button
+          className="rounded bg-primary px-4 py-2 text-primary-foreground"
+          onClick={handleSend}
+          disabled={isSending}
+        >
+          Send
+        </button>
         {hasStarted && (
           <button
             className="rounded border px-4 py-2"

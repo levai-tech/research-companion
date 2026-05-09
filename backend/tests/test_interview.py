@@ -3,6 +3,7 @@ import httpx
 from unittest.mock import AsyncMock, patch
 
 from backend.main import create_app
+from backend.interview import _try_extract_ready_payload
 
 
 @pytest.fixture
@@ -88,3 +89,56 @@ async def test_interview_returns_ready_when_llm_signals_ready(app):
     assert body["phase"] == "ready"
     assert body["message"] == "I think I have enough — continue or click Done."
     assert "layouts" not in body
+
+
+# ── Unit tests: _try_extract_ready_payload ────────────────────────────────────
+
+_READY_DICT = {
+    "phase": "ready",
+    "message": "I think I've got it.",
+    "project_metadata": {"topic": "Quantum computing", "document_type": "essay"},
+}
+
+_READY_JSON = '{"phase": "ready", "message": "I think I\'ve got it.", "project_metadata": {"topic": "Quantum computing", "document_type": "essay"}}'
+
+
+def test_try_extract_bare_json():
+    result = _try_extract_ready_payload(_READY_JSON)
+    assert result is not None
+    assert result["phase"] == "ready"
+    assert result["project_metadata"]["topic"] == "Quantum computing"
+
+
+def test_try_extract_fenced_json_block():
+    fenced = f"```json\n{_READY_JSON}\n```"
+    result = _try_extract_ready_payload(fenced)
+    assert result is not None
+    assert result["phase"] == "ready"
+
+
+def test_try_extract_fence_without_language_tag():
+    fenced = f"```\n{_READY_JSON}\n```"
+    result = _try_extract_ready_payload(fenced)
+    assert result is not None
+    assert result["phase"] == "ready"
+
+
+def test_try_extract_prose_wrapped_json():
+    prose = f"Great, I think I have enough information!\n\n{_READY_JSON}\n\nLet me know if you want to continue."
+    result = _try_extract_ready_payload(prose)
+    assert result is not None
+    assert result["phase"] == "ready"
+
+
+def test_try_extract_returns_none_for_plain_question():
+    result = _try_extract_ready_payload("What topic are you writing about?")
+    assert result is None
+
+
+def test_try_extract_returns_none_for_empty_string():
+    assert _try_extract_ready_payload("") is None
+
+
+def test_try_extract_returns_none_for_non_ready_json():
+    result = _try_extract_ready_payload('{"phase": "chat", "message": "Tell me more."}')
+    assert result is None
