@@ -36,12 +36,17 @@ async def _main(base_dir: str) -> None:
         cancel_flags[resource_id] = cancel_event
         try:
             if model and api_key:
-                from backend.semantic_ingester import SemanticIngester
-                si = SemanticIngester(model=model, api_key=api_key)
-                svc = IngestionService(store=store, semantic_ingester=si)
+                from backend.semantic_ingester_v2 import SemanticIngesterV2
+                from backend.extractor import extract_file_pages
+                from backend.embedder import FastEmbedEmbedder
+
+                raw = await asyncio.to_thread(service.prepare_file_raw, resource_id, filename)
+                if raw is not None:
+                    si = SemanticIngesterV2(model=model, api_key=api_key)
+                    pages = extract_file_pages(raw, filename)
+                    await si.ingest(resource_id, pages, store, FastEmbedEmbedder())
             else:
-                svc = service
-            await asyncio.to_thread(svc.run_file_pipeline, resource_id, filename, cancel_event)
+                await asyncio.to_thread(service.run_file_pipeline, resource_id, filename, cancel_event)
         finally:
             cancel_flags.pop(resource_id, None)
         print(json.dumps({"event": "done", "resource_id": resource_id}), flush=True)
@@ -51,12 +56,15 @@ async def _main(base_dir: str) -> None:
         cancel_flags[resource_id] = cancel_event
         try:
             if model and api_key:
-                from backend.semantic_ingester import SemanticIngester
-                si = SemanticIngester(model=model, api_key=api_key)
-                svc = IngestionService(store=store, semantic_ingester=si)
+                from backend.semantic_ingester_v2 import SemanticIngesterV2
+                from backend.embedder import FastEmbedEmbedder
+
+                text = await asyncio.to_thread(service.prepare_url_text, resource_id, url)
+                if text is not None:
+                    si = SemanticIngesterV2(model=model, api_key=api_key)
+                    await si.ingest(resource_id, [(1, text)], store, FastEmbedEmbedder())
             else:
-                svc = service
-            await asyncio.to_thread(svc.run_url_pipeline, resource_id, url, cancel_event)
+                await asyncio.to_thread(service.run_url_pipeline, resource_id, url, cancel_event)
         finally:
             cancel_flags.pop(resource_id, None)
         print(json.dumps({"event": "done", "resource_id": resource_id}), flush=True)

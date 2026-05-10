@@ -69,25 +69,26 @@ def extract_file(data: bytes, filename: str) -> tuple[str, dict]:
     return text, {}
 
 
-def extract_file_pages(content: bytes, filename: str) -> list[tuple[int, str]]:
-    """Return page-tagged text as (page_number, text) tuples."""
+def extract_file_pages(content: bytes, filename: str):
+    """Yield (page_number, text) tuples; generator so large PDFs stream page by page."""
     name = filename.lower()
     if name.endswith(".pdf"):
-        return _extract_pdf_pages(content)
-    if name.endswith(".docx"):
-        return _extract_docx_pages(content)
-    text = content.decode("utf-8", errors="replace")
-    return [(1, text)]
+        yield from _extract_pdf_pages(content)
+    elif name.endswith(".docx"):
+        yield from _extract_docx_pages(content)
+    else:
+        yield (1, content.decode("utf-8", errors="replace"))
 
 
-def _extract_pdf_pages(data: bytes) -> list[tuple[int, str]]:
+def _extract_pdf_pages(data: bytes):
     import pymupdf  # type: ignore
 
     doc = pymupdf.open(stream=data, filetype="pdf")
-    return [(i + 1, page.get_text()) for i, page in enumerate(doc)]
+    for i, page in enumerate(doc):
+        yield (i + 1, page.get_text())
 
 
-def _extract_docx_pages(data: bytes) -> list[tuple[int, str]]:
+def _extract_docx_pages(data: bytes):
     from docx import Document  # type: ignore
 
     doc = Document(io.BytesIO(data))
@@ -110,9 +111,11 @@ def _extract_docx_pages(data: bytes) -> list[tuple[int, str]]:
         sections.append(current)
 
     if not sections:
-        return [(1, "")]
+        yield (1, "")
+        return
 
-    return [(i + 1, "\n".join(lines)) for i, lines in enumerate(sections)]
+    for i, lines in enumerate(sections):
+        yield (i + 1, "\n".join(lines))
 
 
 def extract_url(html: str) -> tuple[str, dict]:

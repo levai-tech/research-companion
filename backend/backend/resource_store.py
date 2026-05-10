@@ -285,7 +285,21 @@ class ResourceStore:
             "chunks_total": resource.chunks_total,
             "error_message": resource.error_message,
             "current_step": resource.current_step,
+            "batches_total": resource.batches_total,
+            "batches_fallback": resource.batches_fallback,
         }
+
+    def get_chunks(self, resource_id: str) -> list[dict]:
+        with self._db() as con:
+            rows = con.execute(
+                "SELECT id, text, position, location, chunker_id FROM chunks"
+                " WHERE resource_id = ? ORDER BY position",
+                (resource_id,),
+            ).fetchall()
+        return [
+            {"id": r[0], "text": r[1], "position": r[2], "location": r[3], "chunker_id": r[4]}
+            for r in rows
+        ]
 
     def store_chunks_and_embeddings(
         self,

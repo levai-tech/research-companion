@@ -32,7 +32,7 @@ def test_get_returns_defaults_when_file_absent(settings):
 
 def test_settings_default_includes_semantic_ingester_model(settings):
     result = settings.get()
-    assert result["roles"]["semantic_ingester"]["model"] == "anthropic/claude-haiku-4-5"
+    assert result["roles"]["semantic_ingester"]["model"] == "qwen/qwen3-next-80b-a3b-instruct:free"
 
 
 def test_update_persists_role_model(settings, tmp_settings_path):

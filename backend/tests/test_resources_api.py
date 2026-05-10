@@ -115,3 +115,24 @@ async def test_get_status_current_step_reflects_update_step(tmp_app, project, st
 
     assert response.status_code == 200
     assert response.json()["current_step"] == "extracting"
+
+
+# ── Upload size cap ───────────────────────────────────────────────────────────
+
+async def test_file_upload_exceeding_size_limit_returns_413(tmp_app, project):
+    """Files over MAX_UPLOAD_BYTES are rejected with 413 before ingestion."""
+    import backend.main as main_mod
+    original = main_mod.MAX_UPLOAD_BYTES
+    main_mod.MAX_UPLOAD_BYTES = 1024  # shrink to 1 KB for test
+    try:
+        content = b"x" * 1025
+        transport = httpx.ASGITransport(app=tmp_app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+            response = await client.post(
+                f"/projects/{project.id}/resources/file",
+                files={"file": ("large.txt", content, "text/plain")},
+                data={"resource_type": "Book"},
+            )
+        assert response.status_code == 413
+    finally:
+        main_mod.MAX_UPLOAD_BYTES = original

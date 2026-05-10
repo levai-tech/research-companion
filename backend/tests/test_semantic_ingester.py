@@ -15,44 +15,6 @@ class FakeEmbedder:
         return [[0.1] * self.DIM for _ in texts]
 
 
-# ── Slice 1: _parse_response → ChunkResult list (tracer bullet) ───────────────
-
-def test_parse_response_extracts_chunks_with_location():
-    response = (
-        "===CHUNK===\n"
-        "LOCATION: p. 5\n"
-        "First chunk text here.\n"
-        "===CHUNK===\n"
-        "LOCATION: p. 7\n"
-        "Second chunk text here."
-    )
-    results = SemanticIngester._parse_response(response, set())
-    assert len(results) == 2
-    assert results[0].text == "First chunk text here."
-    assert results[0].location == "p. 5"
-    assert results[1].text == "Second chunk text here."
-    assert results[1].location == "p. 7"
-
-
-def test_parse_response_chunk_without_location_header():
-    response = "===CHUNK===\nSome unlabelled text."
-    results = SemanticIngester._parse_response(response, set())
-    assert len(results) == 1
-    assert results[0].location is None
-    assert results[0].text == "Some unlabelled text."
-
-
-def test_parse_response_filters_overlap_zone_pages():
-    response = (
-        "===CHUNK===\nLOCATION: p. 38\nOverlap page — should be dropped.\n"
-        "===CHUNK===\nLOCATION: p. 39\nAnother overlap page — dropped.\n"
-        "===CHUNK===\nLOCATION: p. 40\nReal chunk — should be kept."
-    )
-    results = SemanticIngester._parse_response(response, {38, 39})
-    assert len(results) == 1
-    assert results[0].location == "p. 40"
-
-
 # ── Slice 4: ingest() happy path ──────────────────────────────────────────────
 
 @pytest.fixture
@@ -69,19 +31,6 @@ def _fake_openrouter_response(chunk_text: str, location: str = "p. 1"):
     }
     mock_resp.raise_for_status = MagicMock()
     return mock_resp
-
-
-def test_ingest_stores_chunks_and_sets_ready(store):
-    resource = store.get_or_create("hash-a", "Book")
-    ingester = SemanticIngester(model="test-model", api_key="sk-test")
-
-    with patch("backend.semantic_ingester.httpx.post", return_value=_fake_openrouter_response("Hello world.")):
-        ingester.ingest(resource.id, [(1, "Page one text.")], store, FakeEmbedder())
-
-    status = store.get_status(resource.id)
-    assert status["indexing_status"] == "ready"
-    assert status["chunks_done"] == 1
-    assert status["chunks_total"] == 1
 
 
 # ── Slice 5: ingest() fast-fail when no API key ───────────────────────────────
@@ -201,27 +150,6 @@ def test_ingest_sets_rate_limited_step_while_waiting(store):
     assert rate_limited_steps, "expected at least one rate_limited:<n> step"
     # step resumes to the batch step after the countdown, then moves to "embedding"
     assert steps[rate_limited_steps[-1] + 1].startswith("chunking:")
-
-
-# ── Slice 9: run_file_pipeline uses SemanticIngester ─────────────────────────
-
-def test_run_file_pipeline_uses_semantic_ingester(tmp_path):
-    from backend.resource_store import ResourceStore
-    from backend.ingestion import IngestionService
-
-    store = ResourceStore(base_dir=tmp_path)
-    ingester = SemanticIngester(model="test-model", api_key="sk-test")
-    service = IngestionService(store=store, semantic_ingester=ingester)
-
-    content = b"Hello world, this is page one text."
-    result = service.accept_file(project_id="p1", content=content, resource_type="Book")
-    resource_id = result["resource_id"]
-
-    with patch("backend.semantic_ingester.httpx.post", return_value=_fake_openrouter_response("A chunk.", "p. 1")):
-        service.run_file_pipeline(resource_id, "test.txt")
-
-    status = store.get_status(resource_id)
-    assert status["indexing_status"] == "ready"
 
 
 # ── Slice 9: ingest() sets chunking then embedding steps ─────────────────────

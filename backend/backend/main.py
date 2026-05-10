@@ -18,6 +18,7 @@ from backend.runner import IngestionRunner
 from backend.settings import Settings
 
 _DEFAULT_BASE_DIR = Path.home() / ".research-companion"
+MAX_UPLOAD_BYTES = 200 * 1024 * 1024  # 200 MB
 
 
 def find_free_port() -> int:
@@ -205,6 +206,8 @@ def create_app(settings_path: Path | None = None, projects_dir: Path | None = No
         except json.JSONDecodeError:
             meta = {}
         content = await file.read()
+        if len(content) > MAX_UPLOAD_BYTES:
+            raise HTTPException(status_code=413, detail="File exceeds 200 MB limit")
         result = ingestion_service.accept_file(
             project_id=project_id,
             content=content,

@@ -99,6 +99,40 @@ class IngestionService:
         except Exception as exc:
             self._store.update_status(resource_id, "failed", error_message=str(exc))
 
+    def prepare_url_text(self, resource_id: str, url: str) -> str | None:
+        """Fetch URL, extract text, merge citation. Returns None on error."""
+        from backend.extractor import extract_url
+
+        self._store.update_status(resource_id, "indexing")
+        self._store.update_step(resource_id, "extracting")
+        try:
+            resp = httpx.get(url, follow_redirects=True, timeout=30)
+            resp.raise_for_status()
+            text, citation = extract_url(resp.text)
+        except Exception as exc:
+            self._store.update_status(resource_id, "failed", error_message=str(exc))
+            return None
+        if citation:
+            _merge_citation(self._store, resource_id, citation)
+        return text
+
+    def prepare_file_raw(self, resource_id: str, filename: str) -> bytes | None:
+        """Read raw bytes, set indexing status, merge citation. Returns None if file not found."""
+        from backend.extractor import extract_file
+
+        content_hash = _content_hash_for(resource_id, self._store)
+        src = (self._store._sources_dir / content_hash) if content_hash else None
+        if src is None or not src.exists():
+            self._store.update_status(resource_id, "failed", error_message="source file not found")
+            return None
+        self._store.update_status(resource_id, "indexing")
+        self._store.update_step(resource_id, "extracting")
+        raw = src.read_bytes()
+        _, citation = extract_file(raw, filename)
+        if citation:
+            _merge_citation(self._store, resource_id, citation)
+        return raw
+
     def run_file_pipeline(
         self,
         resource_id: str,
@@ -118,7 +152,7 @@ class IngestionService:
         if citation:
             _merge_citation(self._store, resource_id, citation)
         if self._semantic_ingester is not None:
-            pages = extract_file_pages(raw, filename)
+            pages = list(extract_file_pages(raw, filename))  # v1 needs list
             self._semantic_ingester.ingest(resource_id, pages, self._store, self._embedder)
         else:
             self.run_ingestion(resource_id, text, self._chunker, self._embedder, cancel_event=cancel_event)
