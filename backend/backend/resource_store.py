@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import json
+import shutil
 import sqlite3
 import uuid
+from contextlib import contextmanager
 from dataclasses import dataclass, asdict
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Generator
 
 import sqlite_vec
 
@@ -24,6 +27,8 @@ class Resource:
     chunks_total: int = 0
     error_message: str | None = None
     current_step: str | None = None
+    batches_total: int = 0
+    batches_fallback: int = 0
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -42,19 +47,11 @@ CREATE TABLE IF NOT EXISTS resources (
     chunks_done       INTEGER NOT NULL DEFAULT 0,
     chunks_total      INTEGER NOT NULL DEFAULT 0,
     error_message     TEXT,
-    current_step      TEXT
+    current_step      TEXT,
+    batches_total     INTEGER NOT NULL DEFAULT 0,
+    batches_fallback  INTEGER NOT NULL DEFAULT 0
 )
 """
-
-_MIGRATIONS = [
-    "ALTER TABLE resources ADD COLUMN chunker_id TEXT",
-    "ALTER TABLE resources ADD COLUMN embedder_id TEXT",
-    "ALTER TABLE resources ADD COLUMN chunks_done INTEGER NOT NULL DEFAULT 0",
-    "ALTER TABLE resources ADD COLUMN chunks_total INTEGER NOT NULL DEFAULT 0",
-    "ALTER TABLE resources ADD COLUMN error_message TEXT",
-    "ALTER TABLE chunks ADD COLUMN location TEXT",
-    "ALTER TABLE resources ADD COLUMN current_step TEXT",
-]
 
 _CREATE_CHUNKS = """
 CREATE TABLE IF NOT EXISTS chunks (
@@ -62,7 +59,8 @@ CREATE TABLE IF NOT EXISTS chunks (
     resource_id TEXT NOT NULL REFERENCES resources(id),
     text        TEXT NOT NULL,
     position    INTEGER NOT NULL,
-    location    TEXT
+    location    TEXT,
+    chunker_id  TEXT
 )
 """
 
@@ -82,6 +80,14 @@ CREATE TABLE IF NOT EXISTS project_resources (
 )
 """
 
+_CREATE_SCHEMA_VERSION = """
+CREATE TABLE IF NOT EXISTS schema_version (
+    version INTEGER PRIMARY KEY
+)
+"""
+
+_SCHEMA_VERSION = 2
+
 
 class ResourceStore:
     def __init__(self, base_dir: Path) -> None:
@@ -98,18 +104,47 @@ class ResourceStore:
         con.enable_load_extension(False)
         return con
 
-    def _init_db(self) -> None:
+    @contextmanager
+    def _db(self) -> Generator[sqlite3.Connection, None, None]:
         con = self._connect()
-        con.execute(_CREATE_RESOURCES)
-        con.execute(_CREATE_CHUNKS)
-        con.execute(_CREATE_EMBEDDINGS)
-        for stmt in _MIGRATIONS:
-            try:
-                con.execute(stmt)
-            except sqlite3.OperationalError:
-                pass  # column already exists
-        con.commit()
-        con.close()
+        try:
+            yield con
+            con.commit()
+        finally:
+            con.close()
+
+    def _destructive_migrate(self, con: sqlite3.Connection) -> None:
+        for table in ("chunks", "embeddings", "resources"):
+            con.execute(f"DROP TABLE IF EXISTS {table}")
+        projects_dir = self._base_dir / "projects"
+        if projects_dir.exists():
+            for project_dir in projects_dir.iterdir():
+                db_path = project_dir / "db.sqlite"
+                if not db_path.exists():
+                    continue
+                pcon = sqlite3.connect(db_path)
+                try:
+                    pcon.execute("DELETE FROM project_resources")
+                    pcon.commit()
+                finally:
+                    pcon.close()
+        if self._sources_dir.exists():
+            shutil.rmtree(self._sources_dir)
+            self._sources_dir.mkdir()
+
+    def _init_db(self) -> None:
+        with self._db() as con:
+            con.execute(_CREATE_SCHEMA_VERSION)
+            current = con.execute("SELECT MAX(version) FROM schema_version").fetchone()[0] or 0
+            if current < _SCHEMA_VERSION:
+                self._destructive_migrate(con)
+                con.execute(
+                    "INSERT OR REPLACE INTO schema_version (version) VALUES (?)",
+                    (_SCHEMA_VERSION,),
+                )
+            con.execute(_CREATE_RESOURCES)
+            con.execute(_CREATE_CHUNKS)
+            con.execute(_CREATE_EMBEDDINGS)
 
     def _project_con(self, project_id: str) -> sqlite3.Connection:
         db_path = self._base_dir / "projects" / project_id / "db.sqlite"
@@ -125,26 +160,28 @@ class ResourceStore:
             created_at=row[5], chunker_id=row[6], embedder_id=row[7],
             chunks_done=row[8] or 0, chunks_total=row[9] or 0,
             error_message=row[10], current_step=row[11],
+            batches_total=row[12] or 0, batches_fallback=row[13] or 0,
         )
 
     def _select_resource(self, con: sqlite3.Connection, where: str, params: tuple) -> Resource | None:
         row = con.execute(
             "SELECT id, content_hash, resource_type, indexing_status, citation_metadata,"
-            " created_at, chunker_id, embedder_id, chunks_done, chunks_total, error_message, current_step"
+            " created_at, chunker_id, embedder_id, chunks_done, chunks_total, error_message,"
+            " current_step, batches_total, batches_fallback"
             f" FROM resources WHERE {where}",
             params,
         ).fetchone()
         return self._row_to_resource(row) if row else None
 
-    def _reset_failed(self, resource_id: str) -> None:
-        con = self._connect()
+    def _reset_failed(self, resource_id: str, con: sqlite3.Connection) -> None:
         chunk_ids = [
             r[0] for r in con.execute(
                 "SELECT id FROM chunks WHERE resource_id = ?", (resource_id,)
             ).fetchall()
         ]
-        for chunk_id in chunk_ids:
-            con.execute("DELETE FROM embeddings WHERE chunk_id = ?", (chunk_id,))
+        if chunk_ids:
+            placeholders = ",".join("?" * len(chunk_ids))
+            con.execute(f"DELETE FROM embeddings WHERE chunk_id IN ({placeholders})", chunk_ids)
         con.execute("DELETE FROM chunks WHERE resource_id = ?", (resource_id,))
         con.execute(
             "UPDATE resources SET indexing_status='queued', error_message=NULL,"
@@ -152,8 +189,6 @@ class ResourceStore:
             " chunker_id=NULL, embedder_id=NULL WHERE id=?",
             (resource_id,),
         )
-        con.commit()
-        con.close()
 
     def get_or_create(
         self,
@@ -161,37 +196,34 @@ class ResourceStore:
         resource_type: str,
         citation_metadata: dict | None = None,
     ) -> Resource:
-        con = self._connect()
-        existing = self._select_resource(con, "content_hash = ?", (content_hash,))
-        if existing:
-            con.close()
-            if existing.indexing_status == "failed":
-                self._reset_failed(existing.id)
-                return Resource(
-                    id=existing.id,
-                    content_hash=existing.content_hash,
-                    resource_type=existing.resource_type,
-                    indexing_status="queued",
-                    citation_metadata=existing.citation_metadata,
-                    created_at=existing.created_at,
-                )
-            return existing
+        with self._db() as con:
+            existing = self._select_resource(con, "content_hash = ?", (content_hash,))
+            if existing:
+                if existing.indexing_status == "failed":
+                    self._reset_failed(existing.id, con)
+                    return Resource(
+                        id=existing.id,
+                        content_hash=existing.content_hash,
+                        resource_type=existing.resource_type,
+                        indexing_status="queued",
+                        citation_metadata=existing.citation_metadata,
+                        created_at=existing.created_at,
+                    )
+                return existing
 
-        resource_id = str(uuid.uuid4())
-        created_at = datetime.now(timezone.utc).isoformat()
-        metadata_json = json.dumps(citation_metadata or {})
-        con.execute(
-            "INSERT INTO resources (id, content_hash, resource_type, indexing_status, citation_metadata, created_at)"
-            " VALUES (?, ?, ?, 'queued', ?, ?)",
-            (resource_id, content_hash, resource_type, metadata_json, created_at),
-        )
-        con.commit()
-        con.close()
-        return Resource(
-            id=resource_id, content_hash=content_hash, resource_type=resource_type,
-            indexing_status="queued", citation_metadata=citation_metadata or {},
-            created_at=created_at,
-        )
+            resource_id = str(uuid.uuid4())
+            created_at = datetime.now(timezone.utc).isoformat()
+            metadata_json = json.dumps(citation_metadata or {})
+            con.execute(
+                "INSERT INTO resources (id, content_hash, resource_type, indexing_status, citation_metadata, created_at)"
+                " VALUES (?, ?, ?, 'queued', ?, ?)",
+                (resource_id, content_hash, resource_type, metadata_json, created_at),
+            )
+            return Resource(
+                id=resource_id, content_hash=content_hash, resource_type=resource_type,
+                indexing_status="queued", citation_metadata=citation_metadata or {},
+                created_at=created_at,
+            )
 
     def update_status(
         self,
@@ -203,50 +235,48 @@ class ResourceStore:
         chunks_total: int = 0,
         error_message: str | None = None,
     ) -> None:
-        con = self._connect()
-        if status in ("ready", "failed"):
-            con.execute(
-                "UPDATE resources SET indexing_status=?, chunker_id=?, embedder_id=?,"
-                " chunks_done=?, chunks_total=?, error_message=?, current_step=NULL WHERE id=?",
-                (status, chunker_id, embedder_id, chunks_done, chunks_total, error_message, resource_id),
-            )
-        else:
-            con.execute(
-                "UPDATE resources SET indexing_status=?, chunker_id=?, embedder_id=?,"
-                " chunks_done=?, chunks_total=?, error_message=? WHERE id=?",
-                (status, chunker_id, embedder_id, chunks_done, chunks_total, error_message, resource_id),
-            )
-        con.commit()
-        con.close()
+        with self._db() as con:
+            if status in ("ready", "failed"):
+                con.execute(
+                    "UPDATE resources SET indexing_status=?, chunker_id=?, embedder_id=?,"
+                    " chunks_done=?, chunks_total=?, error_message=?, current_step=NULL WHERE id=?",
+                    (status, chunker_id, embedder_id, chunks_done, chunks_total, error_message, resource_id),
+                )
+            else:
+                con.execute(
+                    "UPDATE resources SET indexing_status=?, chunker_id=?, embedder_id=?,"
+                    " chunks_done=?, chunks_total=?, error_message=? WHERE id=?",
+                    (status, chunker_id, embedder_id, chunks_done, chunks_total, error_message, resource_id),
+                )
 
     def update_step(self, resource_id: str, step: str | None) -> None:
-        con = self._connect()
-        con.execute(
-            "UPDATE resources SET current_step=? WHERE id=?",
-            (step, resource_id),
-        )
-        con.commit()
-        con.close()
+        with self._db() as con:
+            con.execute(
+                "UPDATE resources SET current_step=? WHERE id=?",
+                (step, resource_id),
+            )
 
     def update_progress(self, resource_id: str, chunks_done: int, chunks_total: int) -> None:
-        con = self._connect()
-        con.execute(
-            "UPDATE resources SET chunks_done=?, chunks_total=? WHERE id=?",
-            (chunks_done, chunks_total, resource_id),
-        )
-        con.commit()
-        con.close()
+        with self._db() as con:
+            con.execute(
+                "UPDATE resources SET chunks_done=?, chunks_total=? WHERE id=?",
+                (chunks_done, chunks_total, resource_id),
+            )
+
+    def update_batches(self, resource_id: str, batches_total: int, batches_fallback: int) -> None:
+        with self._db() as con:
+            con.execute(
+                "UPDATE resources SET batches_total=?, batches_fallback=? WHERE id=?",
+                (batches_total, batches_fallback, resource_id),
+            )
 
     def get(self, resource_id: str) -> Resource | None:
-        con = self._connect()
-        resource = self._select_resource(con, "id = ?", (resource_id,))
-        con.close()
-        return resource
+        with self._db() as con:
+            return self._select_resource(con, "id = ?", (resource_id,))
 
     def get_status(self, resource_id: str) -> dict | None:
-        con = self._connect()
-        resource = self._select_resource(con, "id = ?", (resource_id,))
-        con.close()
+        with self._db() as con:
+            resource = self._select_resource(con, "id = ?", (resource_id,))
         if resource is None:
             return None
         return {
@@ -265,34 +295,42 @@ class ResourceStore:
         chunker_id: str,
         embedder_id: str,
         locations: list[str | None] | None = None,
+        chunker_ids: list[str] | None = None,
     ) -> None:
-        con = self._connect()
-        existing_chunk_ids = [
-            r[0] for r in con.execute(
-                "SELECT id FROM chunks WHERE resource_id = ?", (resource_id,)
-            ).fetchall()
-        ]
-        for cid in existing_chunk_ids:
-            con.execute("DELETE FROM embeddings WHERE chunk_id = ?", (cid,))
-        con.execute("DELETE FROM chunks WHERE resource_id = ?", (resource_id,))
         locs = locations if locations is not None else [None] * len(chunks)
-        for i, (text, vector, loc) in enumerate(zip(chunks, embeddings, locs)):
-            chunk_id = str(uuid.uuid4())
-            con.execute(
-                "INSERT INTO chunks (id, resource_id, text, position, location) VALUES (?, ?, ?, ?, ?)",
-                (chunk_id, resource_id, text, i, loc),
+        cids = chunker_ids if chunker_ids is not None else [chunker_id] * len(chunks)
+        with self._db() as con:
+            existing_chunk_ids = [
+                r[0] for r in con.execute(
+                    "SELECT id FROM chunks WHERE resource_id = ?", (resource_id,)
+                ).fetchall()
+            ]
+            if existing_chunk_ids:
+                placeholders = ",".join("?" * len(existing_chunk_ids))
+                con.execute(
+                    f"DELETE FROM embeddings WHERE chunk_id IN ({placeholders})",
+                    existing_chunk_ids,
+                )
+            con.execute("DELETE FROM chunks WHERE resource_id = ?", (resource_id,))
+            chunk_rows = []
+            embedding_rows = []
+            for i, (text, vector, loc, cid) in enumerate(zip(chunks, embeddings, locs, cids)):
+                chunk_uuid = str(uuid.uuid4())
+                chunk_rows.append((chunk_uuid, resource_id, text, i, loc, cid))
+                embedding_rows.append((chunk_uuid, json.dumps(vector)))
+            con.executemany(
+                "INSERT INTO chunks (id, resource_id, text, position, location, chunker_id) VALUES (?, ?, ?, ?, ?, ?)",
+                chunk_rows,
             )
-            con.execute(
+            con.executemany(
                 "INSERT INTO embeddings (chunk_id, embedding) VALUES (?, ?)",
-                (chunk_id, json.dumps(vector)),
+                embedding_rows,
             )
-        con.execute(
-            "UPDATE resources SET indexing_status='ready', chunker_id=?, embedder_id=?,"
-            " chunks_done=?, chunks_total=?, current_step=NULL WHERE id=?",
-            (chunker_id, embedder_id, len(chunks), len(chunks), resource_id),
-        )
-        con.commit()
-        con.close()
+            con.execute(
+                "UPDATE resources SET indexing_status='ready', chunker_id=?, embedder_id=?,"
+                " chunks_done=?, chunks_total=?, current_step=NULL WHERE id=?",
+                (chunker_id, embedder_id, len(chunks), len(chunks), resource_id),
+            )
 
     def attach(self, project_id: str, resource_id: str) -> None:
         added_at = datetime.now(timezone.utc).isoformat()
@@ -315,14 +353,13 @@ class ResourceStore:
         proj_con.close()
         if not resource_ids:
             return []
-        con = self._connect()
-        placeholders = ",".join("?" * len(resource_ids))
-        rows = con.execute(
-            f"SELECT id, content_hash, resource_type, indexing_status, citation_metadata, created_at"
-            f" FROM resources WHERE id IN ({placeholders})",
-            resource_ids,
-        ).fetchall()
-        con.close()
+        with self._db() as con:
+            placeholders = ",".join("?" * len(resource_ids))
+            rows = con.execute(
+                f"SELECT id, content_hash, resource_type, indexing_status, citation_metadata, created_at"
+                f" FROM resources WHERE id IN ({placeholders})",
+                resource_ids,
+            ).fetchall()
         return [
             Resource(
                 id=r[0], content_hash=r[1], resource_type=r[2],
@@ -349,42 +386,40 @@ class ResourceStore:
         if not resource_ids:
             return []
 
-        con = self._connect()
-        placeholders = ",".join("?" * len(resource_ids))
-        ready_ids = {
-            r[0] for r in con.execute(
-                f"SELECT id FROM resources WHERE id IN ({placeholders}) AND indexing_status = 'ready'",
-                resource_ids,
+        with self._db() as con:
+            placeholders = ",".join("?" * len(resource_ids))
+            ready_ids = {
+                r[0] for r in con.execute(
+                    f"SELECT id FROM resources WHERE id IN ({placeholders}) AND indexing_status = 'ready'",
+                    resource_ids,
+                ).fetchall()
+            }
+            if not ready_ids:
+                return []
+
+            knn_rows = con.execute(
+                "SELECT chunk_id, distance FROM embeddings WHERE embedding MATCH ? AND k = ?",
+                (json.dumps(query_embedding), top_k * max(len(ready_ids), 5)),
             ).fetchall()
-        }
-        if not ready_ids:
-            con.close()
-            return []
 
-        knn_rows = con.execute(
-            "SELECT chunk_id, distance FROM embeddings WHERE embedding MATCH ? AND k = ?",
-            (json.dumps(query_embedding), top_k * max(len(ready_ids), 5)),
-        ).fetchall()
+            results = []
+            for chunk_id, distance in knn_rows:
+                if len(results) >= top_k:
+                    break
+                chunk_row = con.execute(
+                    "SELECT text, resource_id, location FROM chunks WHERE id = ?", (chunk_id,)
+                ).fetchone()
+                if chunk_row is None or chunk_row[1] not in ready_ids:
+                    continue
+                resource = self._select_resource(con, "id = ?", (chunk_row[1],))
+                results.append({
+                    "chunk_text": chunk_row[0],
+                    "score": round(max(0.0, 1.0 - float(distance)), 4),
+                    "resource_type": resource.resource_type if resource else "",
+                    "citation_metadata": resource.citation_metadata if resource else {},
+                    "location": chunk_row[2],
+                })
 
-        results = []
-        for chunk_id, distance in knn_rows:
-            if len(results) >= top_k:
-                break
-            chunk_row = con.execute(
-                "SELECT text, resource_id, location FROM chunks WHERE id = ?", (chunk_id,)
-            ).fetchone()
-            if chunk_row is None or chunk_row[1] not in ready_ids:
-                continue
-            resource = self._select_resource(con, "id = ?", (chunk_row[1],))
-            results.append({
-                "chunk_text": chunk_row[0],
-                "score": round(max(0.0, 1.0 - float(distance)), 4),
-                "resource_type": resource.resource_type if resource else "",
-                "citation_metadata": resource.citation_metadata if resource else {},
-                "location": chunk_row[2],
-            })
-
-        con.close()
         return results
 
     def detach(self, project_id: str, resource_id: str) -> None:
@@ -426,21 +461,23 @@ class ResourceStore:
         return False
 
     def _delete_resource(self, resource_id: str) -> None:
-        con = self._connect()
-        chunk_ids = [
-            r[0] for r in con.execute(
-                "SELECT id FROM chunks WHERE resource_id = ?", (resource_id,)
-            ).fetchall()
-        ]
-        for chunk_id in chunk_ids:
-            con.execute("DELETE FROM embeddings WHERE chunk_id = ?", (chunk_id,))
-        con.execute("DELETE FROM chunks WHERE resource_id = ?", (resource_id,))
-        row = con.execute(
-            "SELECT content_hash FROM resources WHERE id = ?", (resource_id,)
-        ).fetchone()
-        con.execute("DELETE FROM resources WHERE id = ?", (resource_id,))
-        con.commit()
-        con.close()
+        with self._db() as con:
+            chunk_ids = [
+                r[0] for r in con.execute(
+                    "SELECT id FROM chunks WHERE resource_id = ?", (resource_id,)
+                ).fetchall()
+            ]
+            if chunk_ids:
+                placeholders = ",".join("?" * len(chunk_ids))
+                con.execute(
+                    f"DELETE FROM embeddings WHERE chunk_id IN ({placeholders})",
+                    chunk_ids,
+                )
+            con.execute("DELETE FROM chunks WHERE resource_id = ?", (resource_id,))
+            row = con.execute(
+                "SELECT content_hash FROM resources WHERE id = ?", (resource_id,)
+            ).fetchone()
+            con.execute("DELETE FROM resources WHERE id = ?", (resource_id,))
         if row:
             file_path = self._sources_dir / row[0]
             if file_path.exists():

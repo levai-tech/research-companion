@@ -25,6 +25,91 @@ def test_schema_creates_resources_db_and_sources_dir(store, tmp_path):
     assert (tmp_path / "sources").is_dir()
 
 
+def test_schema_version_table_exists(store, tmp_path):
+    con = sqlite3.connect(tmp_path / "resources.db")
+    names = {r[0] for r in con.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
+    con.close()
+    assert "schema_version" in names
+
+
+def test_schema_version_idempotent(tmp_path):
+    ResourceStore(base_dir=tmp_path)
+    ResourceStore(base_dir=tmp_path)
+    con = sqlite3.connect(tmp_path / "resources.db")
+    count = con.execute("SELECT COUNT(*) FROM schema_version").fetchone()[0]
+    con.close()
+    assert count == 1
+
+
+def _seed_old_db(tmp_path):
+    """Create a pre-schema_version DB with data, as if from a previous install."""
+    db_path = tmp_path / "resources.db"
+    con = sqlite3.connect(db_path)
+    con.execute(
+        "CREATE TABLE resources (id TEXT PRIMARY KEY, content_hash TEXT NOT NULL UNIQUE,"
+        " resource_type TEXT NOT NULL, indexing_status TEXT NOT NULL DEFAULT 'queued',"
+        " citation_metadata TEXT NOT NULL DEFAULT '{}', created_at TEXT NOT NULL)"
+    )
+    con.execute(
+        "CREATE TABLE chunks (id TEXT PRIMARY KEY, resource_id TEXT NOT NULL, text TEXT NOT NULL, position INTEGER NOT NULL)"
+    )
+    con.execute("INSERT INTO resources VALUES ('r1','h1','Book','ready','{}','2026-01-01')")
+    con.execute("INSERT INTO chunks VALUES ('c1','r1','old text',0)")
+    # per-project DB
+    proj_dir = tmp_path / "projects" / "proj-old"
+    proj_dir.mkdir(parents=True)
+    pcon = sqlite3.connect(proj_dir / "db.sqlite")
+    pcon.execute(
+        "CREATE TABLE project_resources (project_id TEXT NOT NULL, resource_id TEXT NOT NULL,"
+        " added_at TEXT NOT NULL, PRIMARY KEY (project_id, resource_id))"
+    )
+    pcon.execute("INSERT INTO project_resources VALUES ('proj-old','r1','2026-01-01')")
+    pcon.commit()
+    pcon.close()
+    con.commit()
+    con.close()
+
+
+def test_destructive_migration_drops_chunks_and_resources(tmp_path):
+    _seed_old_db(tmp_path)
+    ResourceStore(base_dir=tmp_path)
+    con = sqlite3.connect(tmp_path / "resources.db")
+    resources_count = con.execute("SELECT COUNT(*) FROM resources").fetchone()[0]
+    chunks_count = con.execute("SELECT COUNT(*) FROM chunks").fetchone()[0]
+    con.close()
+    assert resources_count == 0
+    assert chunks_count == 0
+
+
+def test_destructive_migration_drops_project_resources(tmp_path):
+    _seed_old_db(tmp_path)
+    ResourceStore(base_dir=tmp_path)
+    pcon = sqlite3.connect(tmp_path / "projects" / "proj-old" / "db.sqlite")
+    count = pcon.execute("SELECT COUNT(*) FROM project_resources").fetchone()[0]
+    pcon.close()
+    assert count == 0
+
+
+def test_destructive_migration_wipes_sources_dir(tmp_path):
+    _seed_old_db(tmp_path)
+    sources_dir = tmp_path / "sources"
+    sources_dir.mkdir(exist_ok=True)
+    (sources_dir / "old_file.bin").write_bytes(b"stale data")
+    ResourceStore(base_dir=tmp_path)
+    assert not (sources_dir / "old_file.bin").exists()
+
+
+def test_destructive_migration_runs_only_once(tmp_path):
+    _seed_old_db(tmp_path)
+    store = ResourceStore(base_dir=tmp_path)
+    resource = store.get_or_create("new-hash", "Book")
+    ResourceStore(base_dir=tmp_path)
+    con = sqlite3.connect(tmp_path / "resources.db")
+    count = con.execute("SELECT COUNT(*) FROM resources WHERE id=?", (resource.id,)).fetchone()[0]
+    con.close()
+    assert count == 1
+
+
 def test_schema_resources_and_chunks_tables_exist(store, tmp_path):
     con = sqlite3.connect(tmp_path / "resources.db")
     names = {r[0] for r in con.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
@@ -48,6 +133,71 @@ def test_schema_chunks_has_location_column(store, tmp_path):
     cols = {r[1] for r in con.execute("PRAGMA table_info(chunks)").fetchall()}
     con.close()
     assert "location" in cols
+
+
+def test_schema_chunks_has_chunker_id_column(store, tmp_path):
+    con = sqlite3.connect(tmp_path / "resources.db")
+    cols = {r[1] for r in con.execute("PRAGMA table_info(chunks)").fetchall()}
+    con.close()
+    assert "chunker_id" in cols
+
+
+def test_store_chunks_per_chunk_chunker_id_round_trips(store, tmp_path):
+    resource = store.get_or_create("hash-cid", "Book")
+    chunks = ["semantic chunk", "fallback chunk"]
+    embeddings = [[0.1] * 384, [0.2] * 384]
+    chunker_ids = ["semantic-ingester-v2", "recursive-v1-fallback"]
+
+    store.store_chunks_and_embeddings(
+        resource.id, chunks, embeddings, "semantic-ingester-v2", "embedder-v1",
+        chunker_ids=chunker_ids,
+    )
+
+    con = sqlite3.connect(tmp_path / "resources.db")
+    rows = con.execute(
+        "SELECT text, chunker_id FROM chunks WHERE resource_id=? ORDER BY position",
+        (resource.id,),
+    ).fetchall()
+    con.close()
+    assert rows == [("semantic chunk", "semantic-ingester-v2"), ("fallback chunk", "recursive-v1-fallback")]
+
+
+def test_store_chunks_without_chunker_ids_uses_resource_chunker_id(store, tmp_path):
+    resource = store.get_or_create("hash-cid-default", "Book")
+    chunks = ["only chunk"]
+    embeddings = [[0.1] * 384]
+
+    store.store_chunks_and_embeddings(
+        resource.id, chunks, embeddings, "recursive-v1-fallback", "embedder-v1",
+    )
+
+    con = sqlite3.connect(tmp_path / "resources.db")
+    row = con.execute(
+        "SELECT chunker_id FROM chunks WHERE resource_id=?", (resource.id,)
+    ).fetchone()
+    con.close()
+    assert row[0] == "recursive-v1-fallback"
+
+
+def test_store_chunks_executemany_correct_count(store, tmp_path):
+    resource = store.get_or_create("hash-many", "Book")
+    n = 5
+    store.store_chunks_and_embeddings(
+        resource.id,
+        chunks=[f"chunk {i}" for i in range(n)],
+        embeddings=[[float(i) / 10] * 384 for i in range(n)],
+        chunker_id="c",
+        embedder_id="e",
+    )
+    con = sqlite3.connect(tmp_path / "resources.db")
+    con.enable_load_extension(True)
+    sqlite_vec.load(con)
+    con.enable_load_extension(False)
+    chunk_count = con.execute("SELECT COUNT(*) FROM chunks WHERE resource_id=?", (resource.id,)).fetchone()[0]
+    emb_count = con.execute("SELECT COUNT(*) FROM embeddings").fetchone()[0]
+    con.close()
+    assert chunk_count == n
+    assert emb_count == n
 
 
 def test_store_chunks_and_embeddings_stores_locations(store, tmp_path):
@@ -342,6 +492,14 @@ def test_schema_resources_has_current_step_column(store, tmp_path):
     cols = {r[1] for r in con.execute("PRAGMA table_info(resources)").fetchall()}
     con.close()
     assert "current_step" in cols
+
+
+def test_schema_resources_has_batch_columns(store, tmp_path):
+    con = sqlite3.connect(tmp_path / "resources.db")
+    cols = {r[1] for r in con.execute("PRAGMA table_info(resources)").fetchall()}
+    con.close()
+    assert "batches_total" in cols
+    assert "batches_fallback" in cols
 
 
 def test_get_status_includes_current_step_as_null_initially(store):
