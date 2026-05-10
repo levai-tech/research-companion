@@ -1,7 +1,7 @@
 import argparse
 import json
-import multiprocessing
 import socket
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 import uvicorn
@@ -14,46 +14,10 @@ from backend import interview, approach_explorer, outline_generator
 from backend.ingestion import IngestionService
 from backend.projects import ProjectService
 from backend.resource_store import ResourceStore
+from backend.runner import IngestionRunner
 from backend.settings import Settings
 
 _DEFAULT_BASE_DIR = Path.home() / ".research-companion"
-
-
-# Top-level so multiprocessing.spawn can pickle them.
-def _worker_file_pipeline(
-    base_dir: str,
-    resource_id: str,
-    filename: str,
-    semantic_model: str | None = None,
-    semantic_api_key: str | None = None,
-) -> None:
-    from backend.resource_store import ResourceStore
-    from backend.ingestion import IngestionService
-    si = None
-    if semantic_model and semantic_api_key:
-        from backend.semantic_ingester import SemanticIngester
-        si = SemanticIngester(model=semantic_model, api_key=semantic_api_key)
-    IngestionService(store=ResourceStore(base_dir=Path(base_dir)), semantic_ingester=si).run_file_pipeline(
-        resource_id, filename
-    )
-
-
-def _worker_url_pipeline(
-    base_dir: str,
-    resource_id: str,
-    url: str,
-    semantic_model: str | None = None,
-    semantic_api_key: str | None = None,
-) -> None:
-    from backend.resource_store import ResourceStore
-    from backend.ingestion import IngestionService
-    si = None
-    if semantic_model and semantic_api_key:
-        from backend.semantic_ingester import SemanticIngester
-        si = SemanticIngester(model=semantic_model, api_key=semantic_api_key)
-    IngestionService(store=ResourceStore(base_dir=Path(base_dir)), semantic_ingester=si).run_url_pipeline(
-        resource_id, url
-    )
 
 
 def find_free_port() -> int:
@@ -72,19 +36,26 @@ def _llm_error(e: httpx.HTTPStatusError) -> HTTPException:
 
 
 def create_app(settings_path: Path | None = None, projects_dir: Path | None = None, embedder=None) -> FastAPI:
-    app = FastAPI()
+    settings = Settings(path=settings_path)
+    base_dir = projects_dir or _DEFAULT_BASE_DIR
+    project_service = ProjectService(base_dir=base_dir)
+    resource_store = ResourceStore(base_dir=base_dir)
+    ingestion_service = IngestionService(store=resource_store, embedder=embedder)
+    runner = IngestionRunner(base_dir=base_dir, store=resource_store)
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        await runner.start()
+        yield
+        await runner.stop()
+
+    app = FastAPI(lifespan=lifespan)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],
         allow_methods=["*"],
         allow_headers=["*"],
     )
-    settings = Settings(path=settings_path)
-    base_dir = projects_dir or _DEFAULT_BASE_DIR
-    project_service = ProjectService(base_dir=base_dir)
-    resource_store = ResourceStore(base_dir=base_dir)
-    ingestion_service = IngestionService(store=resource_store, embedder=embedder)
-    _spawn_ctx = multiprocessing.get_context("spawn")
 
     @app.get("/health")
     async def health():
@@ -223,7 +194,6 @@ def create_app(settings_path: Path | None = None, projects_dir: Path | None = No
     @app.post("/projects/{project_id}/resources/file", status_code=202)
     async def post_resource_file(
         project_id: str,
-        background_tasks: BackgroundTasks,
         resource_type: str = "Book",
         citation_metadata: str = Form(default="{}"),
         file: UploadFile = File(...),
@@ -245,13 +215,7 @@ def create_app(settings_path: Path | None = None, projects_dir: Path | None = No
             si_cfg = settings.get().get("roles", {}).get("semantic_ingester", {})
             si_model = si_cfg.get("model")
             si_key = settings.get_key("openrouter_api_key") if si_model else None
-            background_tasks.add_task(
-                _spawn_ctx.Process(
-                    target=_worker_file_pipeline,
-                    args=(str(base_dir), result["resource_id"], file.filename or "upload", si_model, si_key),
-                    daemon=False,
-                ).start
-            )
+            runner.enqueue_file(result["resource_id"], file.filename or "upload", si_model, si_key)
         resource = resource_store.get(result["resource_id"])
         return resource.to_dict() if resource else result
 
@@ -259,7 +223,6 @@ def create_app(settings_path: Path | None = None, projects_dir: Path | None = No
     async def post_resource_url(
         project_id: str,
         body: dict,
-        background_tasks: BackgroundTasks,
     ):
         if project_service.get(project_id) is None:
             raise HTTPException(status_code=404, detail="Project not found")
@@ -276,13 +239,7 @@ def create_app(settings_path: Path | None = None, projects_dir: Path | None = No
             si_cfg = settings.get().get("roles", {}).get("semantic_ingester", {})
             si_model = si_cfg.get("model")
             si_key = settings.get_key("openrouter_api_key") if si_model else None
-            background_tasks.add_task(
-                _spawn_ctx.Process(
-                    target=_worker_url_pipeline,
-                    args=(str(base_dir), result["resource_id"], url, si_model, si_key),
-                    daemon=False,
-                ).start
-            )
+            runner.enqueue_url(result["resource_id"], url, si_model, si_key)
         resource = resource_store.get(result["resource_id"])
         return resource.to_dict() if resource else result
 

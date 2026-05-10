@@ -1,6 +1,7 @@
 import hashlib
 import json
 import sqlite3
+import threading
 
 import pytest
 import sqlite_vec
@@ -253,3 +254,41 @@ def test_run_url_pipeline_sets_extracting_step(store):
         service.run_url_pipeline(resource_id, "https://example.com/page")
 
     assert step_calls[0] == "extracting"
+
+
+# ── Slice 6: per-batch cancellation ──────────────────────────────────────────
+
+def test_run_ingestion_stops_before_second_batch_when_cancelled(store):
+    cancel_event = threading.Event()
+
+    class BatchCountingEmbedder:
+        id = "counting"
+        calls = 0
+
+        def embed(self, texts):
+            BatchCountingEmbedder.calls += 1
+            cancel_event.set()  # set after first batch completes
+            return [[0.1] * 384 for _ in texts]
+
+    # 130 chunks → 3 batches with EMBED_BATCH=64
+    chunks = [f"chunk-{i}" for i in range(130)]
+    resource = store.get_or_create("hash-cancel-batch", "Book")
+    service = IngestionService(store=store)
+    service.run_ingestion(resource.id, "text", FakeChunker(chunks), BatchCountingEmbedder(), cancel_event=cancel_event)
+
+    # Only the first batch should have been embedded
+    assert BatchCountingEmbedder.calls == 1
+    status = store.get_status(resource.id)
+    assert status["indexing_status"] == "failed"
+    assert "cancel" in (status["error_message"] or "").lower()
+
+
+def test_run_ingestion_without_cancel_event_runs_fully(store):
+    chunks = [f"chunk-{i}" for i in range(130)]
+    resource = store.get_or_create("hash-no-cancel", "Book")
+    service = IngestionService(store=store)
+    service.run_ingestion(resource.id, "text", FakeChunker(chunks), FakeEmbedder())
+
+    status = store.get_status(resource.id)
+    assert status["indexing_status"] == "ready"
+    assert status["chunks_done"] == 130

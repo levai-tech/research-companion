@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import threading
 from urllib.parse import urlparse, urlunparse
 
 import httpx
@@ -77,6 +78,7 @@ class IngestionService:
         text: str,
         chunker: Chunker,
         embedder: Embedder,
+        cancel_event: threading.Event | None = None,
     ) -> None:
         try:
             self._store.update_step(resource_id, "chunking")
@@ -86,6 +88,8 @@ class IngestionService:
             self._store.update_step(resource_id, "embedding")
             all_embeddings: list[list[float]] = []
             for i in range(0, total, self._EMBED_BATCH):
+                if cancel_event and cancel_event.is_set():
+                    raise RuntimeError("cancelled")
                 batch = chunks[i : i + self._EMBED_BATCH]
                 all_embeddings.extend(embedder.embed(batch))
                 self._store.update_progress(resource_id, i + len(batch), total)
@@ -95,7 +99,12 @@ class IngestionService:
         except Exception as exc:
             self._store.update_status(resource_id, "failed", error_message=str(exc))
 
-    def run_file_pipeline(self, resource_id: str, filename: str) -> None:
+    def run_file_pipeline(
+        self,
+        resource_id: str,
+        filename: str,
+        cancel_event: threading.Event | None = None,
+    ) -> None:
         from backend.extractor import extract_file, extract_file_pages
 
         src = self._store._sources_dir / _content_hash_for(resource_id, self._store)
@@ -112,9 +121,14 @@ class IngestionService:
             pages = extract_file_pages(raw, filename)
             self._semantic_ingester.ingest(resource_id, pages, self._store, self._embedder)
         else:
-            self.run_ingestion(resource_id, text, self._chunker, self._embedder)
+            self.run_ingestion(resource_id, text, self._chunker, self._embedder, cancel_event=cancel_event)
 
-    def run_url_pipeline(self, resource_id: str, url: str) -> None:
+    def run_url_pipeline(
+        self,
+        resource_id: str,
+        url: str,
+        cancel_event: threading.Event | None = None,
+    ) -> None:
         from backend.extractor import extract_url
 
         self._store.update_status(resource_id, "indexing")
@@ -131,7 +145,7 @@ class IngestionService:
         if self._semantic_ingester is not None:
             self._semantic_ingester.ingest(resource_id, [(1, text)], self._store, self._embedder)
         else:
-            self.run_ingestion(resource_id, text, self._chunker, self._embedder)
+            self.run_ingestion(resource_id, text, self._chunker, self._embedder, cancel_event=cancel_event)
 
 
 def _content_hash_for(resource_id: str, store: ResourceStore) -> str | None:
