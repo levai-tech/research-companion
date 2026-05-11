@@ -37,13 +37,15 @@ async def _main(base_dir: str) -> None:
         try:
             if model and api_key:
                 from backend.semantic_ingester_v2 import SemanticIngesterV2
+                from backend.document_cleaner import DocumentCleaner
                 from backend.extractor import extract_file_pages
                 from backend.embedder import FastEmbedEmbedder
 
                 raw = await asyncio.to_thread(service.prepare_file_raw, resource_id, filename)
                 if raw is not None:
+                    pages = list(extract_file_pages(raw, filename))
+                    pages = await DocumentCleaner(model=model, api_key=api_key).clean(pages)
                     si = SemanticIngesterV2(model=model, api_key=api_key)
-                    pages = extract_file_pages(raw, filename)
                     await si.ingest(resource_id, pages, store, FastEmbedEmbedder())
             else:
                 await asyncio.to_thread(service.run_file_pipeline, resource_id, filename, cancel_event)
