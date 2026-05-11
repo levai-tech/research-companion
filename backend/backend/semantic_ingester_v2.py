@@ -12,7 +12,6 @@ from typing import Iterable
 
 import httpx
 
-from backend.chunker import RecursiveChunker
 from backend.embedder import Embedder
 from backend.resource_store import ResourceStore
 
@@ -110,11 +109,11 @@ class SemanticIngesterV2:
             except ValidationError:
                 continue
 
-        chunker = RecursiveChunker()
-        batch_text = "\n\n".join(text for _, text in batch_pages)
-        location = f"p. {batch_pages[0][0]}" if batch_pages else None
-        fallback_chunks = chunker.chunk(batch_text)
-        return [(text, location, "recursive-v1-fallback") for text in fallback_chunks], True
+        fallback_chunks = [
+            (text, f"p. {page_no}", "paragraph-v1-fallback")
+            for (page_no, _), text in sorted(batch_para_table.items())
+        ]
+        return fallback_chunks, True
 
     async def _call_openrouter_async(
         self,

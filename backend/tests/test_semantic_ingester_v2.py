@@ -181,12 +181,11 @@ def _make_ingester():
     return SemanticIngesterV2(model="test-model", api_key="sk-test")
 
 
-async def test_per_batch_fallback_uses_recursive_chunker(store):
-    """Two consecutive ValidationErrors → RecursiveChunker; chunker_id = recursive-v1-fallback."""
+async def test_paragraph_fallback_emits_one_chunk_per_para(store):
+    """Two consecutive ValidationErrors → one chunk per paragraph, tagged paragraph-v1-fallback."""
     resource = store.get_or_create("hash-v2-fb", "Book")
     ingester = _make_ingester()
 
-    # LLM always returns bad JSON so validation always fails
     mock_cm, _ = _async_openrouter_mock("not json")
 
     with patch("backend.semantic_ingester_v2.httpx.AsyncClient", return_value=mock_cm):
@@ -199,11 +198,38 @@ async def test_per_batch_fallback_uses_recursive_chunker(store):
 
     status = store.get_status(resource.id)
     assert status["indexing_status"] == "ready"
-    # All chunks produced by fallback carry the recursive chunker id
-    from backend.resource_store import ResourceStore
     chunks = store.get_chunks(resource.id)
-    assert chunks, "expected at least one chunk from fallback"
-    assert all(c["chunker_id"] == "recursive-v1-fallback" for c in chunks)
+    assert len(chunks) == 2
+    assert {c["text"] for c in chunks} == {"Para one.", "Para two."}
+    assert all(c["chunker_id"] == "paragraph-v1-fallback" for c in chunks)
+
+
+async def test_paragraph_fallback_location_per_page(store):
+    """Each fallback chunk location reflects its own paragraph's page, not the batch start."""
+    resource = store.get_or_create("hash-v2-fb-loc", "Book")
+    ingester = _make_ingester()
+
+    mock_cm, _ = _async_openrouter_mock("not json")
+
+    import backend.semantic_ingester_v2 as mod
+    original = mod._BATCH_PAGES
+    mod._BATCH_PAGES = 10  # keep both pages in one batch
+    try:
+        with patch("backend.semantic_ingester_v2.httpx.AsyncClient", return_value=mock_cm):
+            await ingester.ingest(
+                resource.id,
+                [(3, "Alpha.\n\nBeta."), (4, "Gamma.")],
+                store,
+                FakeEmbedder(),
+            )
+    finally:
+        mod._BATCH_PAGES = original
+
+    chunks = store.get_chunks(resource.id)
+    by_text = {c["text"]: c["location"] for c in chunks}
+    assert by_text["Alpha."] == "p. 3"
+    assert by_text["Beta."] == "p. 3"
+    assert by_text["Gamma."] == "p. 4"
 
 
 async def test_fallback_increments_batches_fallback(store):
