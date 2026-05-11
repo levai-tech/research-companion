@@ -351,3 +351,48 @@ it("clicking an expanded result card collapses back to preview", async () => {
   const collapsed = await screen.findByText(/^QuantumPhysics/);
   expect(collapsed.textContent).toMatch(/…$/);
 });
+
+// ── Behavior 16: fallback ratio warning on resource list row ──────────────────
+
+it("shows fallback warning on a resource row when ratio > 25%", async () => {
+  global.fetch = mockList([
+    {
+      id: "res-hi-fallback",
+      resource_type: "Book",
+      indexing_status: "ready",
+      citation_metadata: { title: "Batch Heavy Book" },
+      content_hash: "hbf",
+      created_at: "2026-01-01T00:00:00Z",
+      batches_total: 4,
+      batches_fallback: 2,
+    },
+  ]);
+
+  render(<ResourcesTab projectId="proj-1" />);
+
+  expect(
+    await screen.findByText(/2 of 4 batches used recursive fallback/i),
+  ).toBeInTheDocument();
+});
+
+it("does not show fallback warning when batches_total is 0", async () => {
+  global.fetch = mockList([
+    {
+      id: "res-no-batches",
+      resource_type: "Book",
+      indexing_status: "ready",
+      citation_metadata: { title: "Plain Book" },
+      content_hash: "hpb",
+      created_at: "2026-01-01T00:00:00Z",
+      batches_total: 0,
+      batches_fallback: 0,
+    },
+  ]);
+
+  render(<ResourcesTab projectId="proj-1" />);
+
+  await screen.findByText("Plain Book");
+  expect(
+    screen.queryByText(/batches used recursive fallback/i),
+  ).not.toBeInTheDocument();
+});

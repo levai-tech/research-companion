@@ -31,11 +31,11 @@ async def _main(base_dir: str) -> None:
     loop = asyncio.get_event_loop()
     await loop.connect_read_pipe(lambda: protocol, sys.stdin.buffer)
 
-    async def _run_file(resource_id: str, filename: str, model: str | None, api_key: str | None) -> None:
+    async def _run_file(resource_id: str, filename: str, model: str | None, api_key: str | None, force_recursive: bool = False) -> None:
         cancel_event = threading.Event()
         cancel_flags[resource_id] = cancel_event
         try:
-            if model and api_key:
+            if model and api_key and not force_recursive:
                 from backend.semantic_ingester_v2 import SemanticIngesterV2
                 from backend.document_cleaner import DocumentCleaner
                 from backend.extractor import extract_file_pages
@@ -53,11 +53,11 @@ async def _main(base_dir: str) -> None:
             cancel_flags.pop(resource_id, None)
         print(json.dumps({"event": "done", "resource_id": resource_id}), flush=True)
 
-    async def _run_url(resource_id: str, url: str, model: str | None, api_key: str | None) -> None:
+    async def _run_url(resource_id: str, url: str, model: str | None, api_key: str | None, force_recursive: bool = False) -> None:
         cancel_event = threading.Event()
         cancel_flags[resource_id] = cancel_event
         try:
-            if model and api_key:
+            if model and api_key and not force_recursive:
                 from backend.semantic_ingester_v2 import SemanticIngesterV2
                 from backend.embedder import FastEmbedEmbedder
 
@@ -83,11 +83,11 @@ async def _main(base_dir: str) -> None:
         cmd = msg.get("cmd")
         if cmd == "ingest_file":
             asyncio.create_task(
-                _run_file(msg["resource_id"], msg["filename"], msg.get("model"), msg.get("api_key"))
+                _run_file(msg["resource_id"], msg["filename"], msg.get("model"), msg.get("api_key"), bool(msg.get("force_recursive")))
             )
         elif cmd == "ingest_url":
             asyncio.create_task(
-                _run_url(msg["resource_id"], msg["url"], msg.get("model"), msg.get("api_key"))
+                _run_url(msg["resource_id"], msg["url"], msg.get("model"), msg.get("api_key"), bool(msg.get("force_recursive")))
             )
         elif cmd == "cancel":
             rid = msg.get("resource_id")

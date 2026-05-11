@@ -14,6 +14,8 @@ interface StatusResponse {
   chunks_total: number;
   error_message: string | null;
   current_step: string | null;
+  batches_total: number;
+  batches_fallback: number;
 }
 
 function stepLabel(step: string, chunksDone: number, chunksTotal: number): string {
@@ -84,14 +86,21 @@ export default function JobTray({ projectId }: Props) {
           .then((r) => r.json())
           .then((status: StatusResponse) => {
             if (status.indexing_status === "ready") {
+              const hasFallback =
+                status.batches_total > 0 &&
+                status.batches_fallback / status.batches_total > 0.25;
               updateJob(job.resourceId, {
                 status: "ready",
                 chunksDone: status.chunks_done,
                 chunksTotal: status.chunks_total,
                 completedAt: Date.now(),
                 currentStep: null,
+                batchesTotal: status.batches_total,
+                batchesFallback: status.batches_fallback,
               });
-              setTimeout(() => dismissJob(job.resourceId), 5000);
+              if (!hasFallback) {
+                setTimeout(() => dismissJob(job.resourceId), 5000);
+              }
             } else if (status.indexing_status === "failed") {
               updateJob(job.resourceId, {
                 status: "failed",
@@ -104,6 +113,8 @@ export default function JobTray({ projectId }: Props) {
                 chunksDone: status.chunks_done,
                 chunksTotal: status.chunks_total,
                 currentStep: status.current_step,
+                batchesTotal: status.batches_total,
+                batchesFallback: status.batches_fallback,
               });
             }
           });
@@ -183,6 +194,12 @@ export default function JobTray({ projectId }: Props) {
             {job.status === "failed" && job.errorMessage && (
               <p className="text-xs text-red-600">{job.errorMessage}</p>
             )}
+            {job.batchesTotal > 0 &&
+              job.batchesFallback / job.batchesTotal > 0.25 && (
+                <p className="text-xs text-amber-600">
+                  {job.batchesFallback} of {job.batchesTotal} batches used recursive fallback
+                </p>
+              )}
           </div>
           {job.status === "failed" && (
             <button
@@ -192,6 +209,26 @@ export default function JobTray({ projectId }: Props) {
               Dismiss
             </button>
           )}
+          {job.batchesTotal > 0 &&
+            job.batchesFallback / job.batchesTotal > 0.25 && (
+              <button
+                className="text-xs text-amber-700 hover:text-amber-900"
+                onClick={() =>
+                  fetch(
+                    `http://127.0.0.1:${port}/projects/${job.projectId}/resources/${job.resourceId}/reingest`,
+                    {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ mode: "recursive" }),
+                    },
+                  ).then(() => {
+                    updateJob(job.resourceId, { status: "queued", batchesTotal: 0, batchesFallback: 0 });
+                  })
+                }
+              >
+                Re-ingest with recursive chunker
+              </button>
+            )}
         </div>
       ))}
     </div>

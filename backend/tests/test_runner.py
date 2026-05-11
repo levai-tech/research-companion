@@ -184,3 +184,47 @@ async def test_enqueue_file_passes_model_and_api_key(store):
     msg = json.loads(proc.stdin.lines[0].strip())
     assert msg["model"] == "openai/gpt-4o"
     assert msg["api_key"] == "sk-test"
+
+
+# ── force_recursive flag is forwarded in the JSON command ────────────────────
+
+@pytest.mark.asyncio
+async def test_enqueue_file_with_force_recursive_sends_flag(store):
+    proc = FakeProcess()
+    runner = _make_runner(store, proc)
+    await runner.start()
+
+    runner.enqueue_file("res-5", "book.pdf", force_recursive=True)
+
+    await runner.stop()
+
+    msg = json.loads(proc.stdin.lines[0].strip())
+    assert msg["force_recursive"] is True
+
+
+@pytest.mark.asyncio
+async def test_enqueue_url_with_force_recursive_sends_flag(store):
+    proc = FakeProcess()
+    runner = _make_runner(store, proc)
+    await runner.start()
+
+    runner.enqueue_url("res-6", "https://example.com", force_recursive=True)
+
+    await runner.stop()
+
+    msg = json.loads(proc.stdin.lines[0].strip())
+    assert msg["force_recursive"] is True
+
+
+@pytest.mark.asyncio
+async def test_enqueue_file_force_recursive_defaults_false(store):
+    proc = FakeProcess()
+    runner = _make_runner(store, proc)
+    await runner.start()
+
+    runner.enqueue_file("res-7", "doc.txt")
+
+    await runner.stop()
+
+    msg = json.loads(proc.stdin.lines[0].strip())
+    assert msg["force_recursive"] is False

@@ -54,6 +54,35 @@ async def test_e2e_txt_ingest_reaches_ready(tmp_path):
         await runner.stop()
 
 
+# ── E2E 1b: force_recursive skips SemanticIngesterV2 ─────────────────────────
+
+@pytest.mark.asyncio
+async def test_e2e_force_recursive_skips_semantic_ingester(tmp_path):
+    store = ResourceStore(base_dir=tmp_path)
+    runner = IngestionRunner(base_dir=tmp_path, store=store)
+    await runner.start()
+
+    try:
+        content = b"The quick brown fox jumps over the lazy dog. " * 20
+        sha256 = hashlib.sha256(content).hexdigest()
+        resource = store.get_or_create(sha256, "Book")
+        (tmp_path / "sources").mkdir(exist_ok=True)
+        (tmp_path / "sources" / sha256).write_bytes(content)
+        store.attach("project-force-recursive", resource.id)
+
+        runner.enqueue_file(
+            resource.id, "fox.txt",
+            model="openai/gpt-fake", api_key="sk-fake",
+            force_recursive=True,
+        )
+
+        status = await _wait_for_status(store, resource.id, "ready", timeout=30)
+        assert status["chunks_done"] > 0
+        assert status["batches_total"] == 0, "SemanticIngesterV2 should not have been called"
+    finally:
+        await runner.stop()
+
+
 # ── E2E 2: kill-and-respawn cycle ────────────────────────────────────────────
 
 @pytest.mark.asyncio

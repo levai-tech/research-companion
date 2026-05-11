@@ -10,6 +10,8 @@ interface Resource {
   citation_metadata: { title?: string; [key: string]: unknown };
   content_hash: string;
   created_at: string;
+  batches_total?: number;
+  batches_fallback?: number;
 }
 
 interface SearchResult {
@@ -149,6 +151,12 @@ export default function ResourcesTab({ projectId }: Props) {
                     {resource.citation_metadata?.title ?? "(untitled)"}
                   </p>
                   <p className="text-xs text-muted-foreground">{resource.resource_type}</p>
+                  {(resource.batches_total ?? 0) > 0 &&
+                    (resource.batches_fallback ?? 0) / resource.batches_total! > 0.25 && (
+                      <p className="text-xs text-amber-600">
+                        {resource.batches_fallback} of {resource.batches_total} batches used recursive fallback
+                      </p>
+                    )}
                 </div>
                 <span
                   className={`text-xs px-2 py-0.5 rounded-full ${STATUS_CLASS[resource.indexing_status] ?? STATUS_CLASS.queued}`}

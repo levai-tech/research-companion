@@ -218,7 +218,9 @@ def create_app(settings_path: Path | None = None, projects_dir: Path | None = No
             si_cfg = settings.get().get("roles", {}).get("semantic_ingester", {})
             si_model = si_cfg.get("model")
             si_key = settings.get_key("openrouter_api_key") if si_model else None
-            runner.enqueue_file(result["resource_id"], file.filename or "upload", si_model, si_key)
+            filename = file.filename or "upload"
+            resource_store.set_source_ref(result["resource_id"], filename)
+            runner.enqueue_file(result["resource_id"], filename, si_model, si_key)
         resource = resource_store.get(result["resource_id"])
         return resource.to_dict() if resource else result
 
@@ -242,6 +244,7 @@ def create_app(settings_path: Path | None = None, projects_dir: Path | None = No
             si_cfg = settings.get().get("roles", {}).get("semantic_ingester", {})
             si_model = si_cfg.get("model")
             si_key = settings.get_key("openrouter_api_key") if si_model else None
+            resource_store.set_source_ref(result["resource_id"], url)
             runner.enqueue_url(result["resource_id"], url, si_model, si_key)
         resource = resource_store.get(result["resource_id"])
         return resource.to_dict() if resource else result
@@ -254,6 +257,24 @@ def create_app(settings_path: Path | None = None, projects_dir: Path | None = No
         if status is None:
             raise HTTPException(status_code=404, detail="Resource not found")
         return status
+
+    @app.post("/projects/{project_id}/resources/{resource_id}/reingest", status_code=202)
+    async def reingest_resource(project_id: str, resource_id: str, body: dict):
+        if project_service.get(project_id) is None:
+            raise HTTPException(status_code=404, detail="Project not found")
+        resource = resource_store.get(resource_id)
+        if resource is None:
+            raise HTTPException(status_code=404, detail="Resource not found")
+        resource_store.reset_for_reingest(resource_id)
+        si_cfg = settings.get().get("roles", {}).get("semantic_ingester", {})
+        si_model = si_cfg.get("model")
+        si_key = settings.get_key("openrouter_api_key") if si_model else None
+        source = resource.source_ref or ""
+        if resource.resource_type == "Webpage":
+            runner.enqueue_url(resource_id, source, si_model, si_key, force_recursive=True)
+        else:
+            runner.enqueue_file(resource_id, source or "upload", si_model, si_key, force_recursive=True)
+        return {"ok": True}
 
     @app.get("/projects/{project_id}/resources/search")
     async def search_resources(project_id: str, q: str, top_k: int = 10):

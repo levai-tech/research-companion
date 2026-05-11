@@ -20,6 +20,8 @@ function makeJob(overrides: Partial<JobEntry> = {}): JobEntry {
     errorMessage: null,
     completedAt: null,
     currentStep: null,
+    batchesTotal: 0,
+    batchesFallback: 0,
     ...overrides,
   };
 }
@@ -294,6 +296,107 @@ it("shows error message for a failed job and dismiss button removes it", async (
   await userEvent.click(screen.getByRole("button", { name: /dismiss/i }));
 
   expect(screen.queryByText("My Book")).not.toBeInTheDocument();
+});
+
+// ── Behavior 15: fallback ratio warning ──────────────────────────────────────
+
+it("shows fallback warning when more than 25% of batches fell back", async () => {
+  global.fetch = mockEmptyList();
+  useJobTrayStore.setState({
+    jobs: {
+      "res-1": makeJob({
+        status: "ready",
+        completedAt: null,
+        batchesTotal: 4,
+        batchesFallback: 2,
+      }),
+    },
+  });
+
+  render(<JobTray projectId="proj-1" />);
+
+  expect(await screen.findByText(/2 of 4 batches used recursive fallback/i)).toBeInTheDocument();
+});
+
+it("does not show fallback warning when batchesTotal is 0", async () => {
+  global.fetch = mockEmptyList();
+  useJobTrayStore.setState({
+    jobs: {
+      "res-1": makeJob({ status: "ready", completedAt: null, batchesTotal: 0, batchesFallback: 0 }),
+    },
+  });
+
+  render(<JobTray projectId="proj-1" />);
+
+  await screen.findByText("My Book");
+  expect(screen.queryByText(/batches used recursive fallback/i)).not.toBeInTheDocument();
+});
+
+it("does not show fallback warning when ratio is at or below 25%", async () => {
+  global.fetch = mockEmptyList();
+  useJobTrayStore.setState({
+    jobs: {
+      "res-1": makeJob({ status: "ready", completedAt: null, batchesTotal: 4, batchesFallback: 1 }),
+    },
+  });
+
+  render(<JobTray projectId="proj-1" />);
+
+  await screen.findByText("My Book");
+  expect(screen.queryByText(/batches used recursive fallback/i)).not.toBeInTheDocument();
+});
+
+it("shows Re-ingest button alongside fallback warning", async () => {
+  global.fetch = mockEmptyList();
+  useJobTrayStore.setState({
+    jobs: {
+      "res-1": makeJob({
+        status: "ready",
+        completedAt: null,
+        batchesTotal: 4,
+        batchesFallback: 2,
+      }),
+    },
+  });
+
+  render(<JobTray projectId="proj-1" />);
+
+  expect(
+    await screen.findByRole("button", { name: /re-ingest with recursive chunker/i }),
+  ).toBeInTheDocument();
+});
+
+it("clicking Re-ingest button POSTs to the reingest endpoint", async () => {
+  const fetchMock = vi
+    .fn()
+    .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve([]) } as Response)
+    .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ ok: true }) } as Response);
+  global.fetch = fetchMock;
+
+  useJobTrayStore.setState({
+    jobs: {
+      "res-1": makeJob({
+        status: "ready",
+        completedAt: null,
+        batchesTotal: 4,
+        batchesFallback: 2,
+      }),
+    },
+  });
+
+  render(<JobTray projectId="proj-1" />);
+
+  await userEvent.click(
+    await screen.findByRole("button", { name: /re-ingest with recursive chunker/i }),
+  );
+
+  expect(fetchMock).toHaveBeenCalledWith(
+    "http://127.0.0.1:8000/projects/proj-1/resources/res-1/reingest",
+    expect.objectContaining({
+      method: "POST",
+      body: JSON.stringify({ mode: "recursive" }),
+    }),
+  );
 });
 
 // ── Behavior 4: progress updates from polling ─────────────────────────────────

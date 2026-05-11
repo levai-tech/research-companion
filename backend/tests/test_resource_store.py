@@ -542,3 +542,56 @@ def test_store_chunks_and_embeddings_clears_current_step(store):
     status = store.get_status(resource.id)
     assert status["current_step"] is None
     assert status["indexing_status"] == "ready"
+
+
+# ── Behavior 10: source_ref ───────────────────────────────────────────────────
+
+def test_set_source_ref_persists_on_resource(store):
+    resource = store.get_or_create("hash-src-ref", "Book")
+    store.set_source_ref(resource.id, "thesis.pdf")
+    fetched = store.get(resource.id)
+    assert fetched.source_ref == "thesis.pdf"
+
+
+def test_source_ref_defaults_to_none(store):
+    resource = store.get_or_create("hash-no-src-ref", "Book")
+    assert resource.source_ref is None
+
+
+# ── Behavior 11: reset_for_reingest ──────────────────────────────────────────
+
+def test_reset_for_reingest_sets_status_to_queued(store):
+    resource = store.get_or_create("hash-reingest-status", "Book")
+    store.update_status(resource.id, "ready")
+    store.reset_for_reingest(resource.id)
+    assert store.get_status(resource.id)["indexing_status"] == "queued"
+
+
+def test_reset_for_reingest_zeroes_batch_counters(store):
+    resource = store.get_or_create("hash-reingest-batches", "Book")
+    store.update_batches(resource.id, batches_total=6, batches_fallback=3)
+    store.reset_for_reingest(resource.id)
+    status = store.get_status(resource.id)
+    assert status["batches_total"] == 0
+    assert status["batches_fallback"] == 0
+
+
+def test_reset_for_reingest_clears_chunks_and_embeddings(store, tmp_path):
+    resource = store.get_or_create("hash-reingest-chunks", "Book")
+    store.store_chunks_and_embeddings(
+        resource.id, ["old chunk"], [[0.1] * 384], "chunker-v1", "embedder-v1"
+    )
+    store.reset_for_reingest(resource.id)
+    con = sqlite3.connect(tmp_path / "resources.db")
+    count = con.execute(
+        "SELECT COUNT(*) FROM chunks WHERE resource_id=?", (resource.id,)
+    ).fetchone()[0]
+    con.close()
+    assert count == 0
+
+
+def test_reset_for_reingest_preserves_source_ref(store):
+    resource = store.get_or_create("hash-reingest-srcref", "Book")
+    store.set_source_ref(resource.id, "book.pdf")
+    store.reset_for_reingest(resource.id)
+    assert store.get(resource.id).source_ref == "book.pdf"

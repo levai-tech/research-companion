@@ -29,6 +29,7 @@ class Resource:
     current_step: str | None = None
     batches_total: int = 0
     batches_fallback: int = 0
+    source_ref: str | None = None
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -49,7 +50,8 @@ CREATE TABLE IF NOT EXISTS resources (
     error_message     TEXT,
     current_step      TEXT,
     batches_total     INTEGER NOT NULL DEFAULT 0,
-    batches_fallback  INTEGER NOT NULL DEFAULT 0
+    batches_fallback  INTEGER NOT NULL DEFAULT 0,
+    source_ref        TEXT
 )
 """
 
@@ -86,7 +88,7 @@ CREATE TABLE IF NOT EXISTS schema_version (
 )
 """
 
-_SCHEMA_VERSION = 2
+_SCHEMA_VERSION = 3
 
 
 class ResourceStore:
@@ -161,13 +163,14 @@ class ResourceStore:
             chunks_done=row[8] or 0, chunks_total=row[9] or 0,
             error_message=row[10], current_step=row[11],
             batches_total=row[12] or 0, batches_fallback=row[13] or 0,
+            source_ref=row[14],
         )
 
     def _select_resource(self, con: sqlite3.Connection, where: str, params: tuple) -> Resource | None:
         row = con.execute(
             "SELECT id, content_hash, resource_type, indexing_status, citation_metadata,"
             " created_at, chunker_id, embedder_id, chunks_done, chunks_total, error_message,"
-            " current_step, batches_total, batches_fallback"
+            " current_step, batches_total, batches_fallback, source_ref"
             f" FROM resources WHERE {where}",
             params,
         ).fetchone()
@@ -268,6 +271,32 @@ class ResourceStore:
             con.execute(
                 "UPDATE resources SET batches_total=?, batches_fallback=? WHERE id=?",
                 (batches_total, batches_fallback, resource_id),
+            )
+
+    def set_source_ref(self, resource_id: str, source_ref: str) -> None:
+        with self._db() as con:
+            con.execute(
+                "UPDATE resources SET source_ref=? WHERE id=?",
+                (source_ref, resource_id),
+            )
+
+    def reset_for_reingest(self, resource_id: str) -> None:
+        with self._db() as con:
+            chunk_ids = [
+                r[0] for r in con.execute(
+                    "SELECT id FROM chunks WHERE resource_id = ?", (resource_id,)
+                ).fetchall()
+            ]
+            if chunk_ids:
+                placeholders = ",".join("?" * len(chunk_ids))
+                con.execute(f"DELETE FROM embeddings WHERE chunk_id IN ({placeholders})", chunk_ids)
+            con.execute("DELETE FROM chunks WHERE resource_id = ?", (resource_id,))
+            con.execute(
+                "UPDATE resources SET indexing_status='queued', error_message=NULL,"
+                " current_step=NULL, chunks_done=0, chunks_total=0,"
+                " chunker_id=NULL, embedder_id=NULL,"
+                " batches_total=0, batches_fallback=0 WHERE id=?",
+                (resource_id,),
             )
 
     def get(self, resource_id: str) -> Resource | None:

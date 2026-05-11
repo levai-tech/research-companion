@@ -117,6 +117,57 @@ async def test_get_status_current_step_reflects_update_step(tmp_app, project, st
     assert response.json()["current_step"] == "extracting"
 
 
+async def test_get_status_includes_fallback_counters(tmp_app, project, store):
+    resource = store.get_or_create("hash-batches-api", "Book")
+    store.attach(project.id, resource.id)
+    store.update_batches(resource.id, batches_total=4, batches_fallback=2)
+
+    transport = httpx.ASGITransport(app=tmp_app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get(
+            f"/projects/{project.id}/resources/{resource.id}/status"
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["batches_total"] == 4
+    assert body["batches_fallback"] == 2
+
+
+# ── Behavior 4: POST /projects/{id}/resources/{res_id}/reingest ──────────────
+
+async def test_reingest_returns_202_and_resets_to_queued(tmp_app, project, store):
+    resource = store.get_or_create("hash-reingest-api", "Book")
+    store.attach(project.id, resource.id)
+    store.set_source_ref(resource.id, "book.pdf")
+    store.update_status(resource.id, "ready")
+    store.update_batches(resource.id, batches_total=4, batches_fallback=2)
+
+    transport = httpx.ASGITransport(app=tmp_app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post(
+            f"/projects/{project.id}/resources/{resource.id}/reingest",
+            json={"mode": "recursive"},
+        )
+
+    assert response.status_code == 202
+    status = store.get_status(resource.id)
+    assert status["indexing_status"] == "queued"
+    assert status["batches_total"] == 0
+    assert status["batches_fallback"] == 0
+
+
+async def test_reingest_returns_404_for_unknown_resource(tmp_app, project):
+    transport = httpx.ASGITransport(app=tmp_app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post(
+            f"/projects/{project.id}/resources/no-such-id/reingest",
+            json={"mode": "recursive"},
+        )
+
+    assert response.status_code == 404
+
+
 # ── Upload size cap ───────────────────────────────────────────────────────────
 
 async def test_file_upload_exceeding_size_limit_returns_413(tmp_app, project):

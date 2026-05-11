@@ -62,6 +62,8 @@ Five Agent Roles need to call LLMs. Originally the plan called for separate Anth
 
 **Configurable in Settings:** Ollama endpoint URL and embedding model name are stored in `settings.json` so power users can point at a remote Ollama instance or swap models.
 
+> **Updated 2026-05-11:** The default Embedder is now `fastembed` running `BAAI/bge-small-en-v1.5` in-process (ONNX, ~100 MB RAM, no server required). Ollama remains a supported override for power users. The "embeddings never go through OpenRouter" rule still holds. See [CONTEXT.md](../../CONTEXT.md) glossary entry for **Embedder**.
+
 ---
 
 ### 6. Settings UI — cog icon → settings page

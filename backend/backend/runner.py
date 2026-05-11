@@ -84,7 +84,10 @@ class IngestionRunner:
         filename: str,
         model: str | None = None,
         api_key: str | None = None,
+        force_recursive: bool = False,
     ) -> None:
+        if self._proc is None:
+            return
         cmd = json.dumps(
             {
                 "cmd": "ingest_file",
@@ -92,6 +95,7 @@ class IngestionRunner:
                 "filename": filename,
                 "model": model,
                 "api_key": api_key,
+                "force_recursive": force_recursive,
             }
         )
         self._inflight.add(resource_id)
@@ -103,7 +107,10 @@ class IngestionRunner:
         url: str,
         model: str | None = None,
         api_key: str | None = None,
+        force_recursive: bool = False,
     ) -> None:
+        if self._proc is None:
+            return
         cmd = json.dumps(
             {
                 "cmd": "ingest_url",
@@ -111,6 +118,7 @@ class IngestionRunner:
                 "url": url,
                 "model": model,
                 "api_key": api_key,
+                "force_recursive": force_recursive,
             }
         )
         self._inflight.add(resource_id)

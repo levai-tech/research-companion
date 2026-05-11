@@ -10,6 +10,8 @@ export interface JobEntry {
   errorMessage: string | null;
   completedAt: number | null;
   currentStep: string | null;
+  batchesTotal: number;
+  batchesFallback: number;
 }
 
 interface JobTrayStore {
@@ -37,6 +39,8 @@ export const useJobTrayStore = create<JobTrayStore>((set) => ({
             errorMessage: null,
             completedAt: null,
             currentStep: null,
+            batchesTotal: 0,
+            batchesFallback: 0,
           },
         },
       };
