@@ -12,11 +12,17 @@ from backend.ingestion import IngestionService
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
+def _prose(label: str) -> str:
+    """Return a 30+ word prose chunk that survives the quality gate."""
+    filler = "alpha beta gamma delta epsilon zeta theta iota kappa lambda " * 3
+    return f"{label} {filler}".strip()
+
+
 class FakeChunker:
     id = "fake-chunker-v0"
 
     def __init__(self, output: list[str] | None = None):
-        self._output = output or ["chunk one", "chunk two"]
+        self._output = output or [_prose("chunk-one"), _prose("chunk-two")]
 
     def chunk(self, text: str) -> list[str]:
         return self._output
@@ -141,7 +147,7 @@ def test_get_status_returns_none_for_unknown_resource(service):
 
 def test_ingestion_run_stores_chunks(service, store, tmp_path):
     resource = store.get_or_create("hash-x", "Book")
-    service.run_ingestion(resource.id, "some text", FakeChunker(["a", "b", "c"]), FakeEmbedder())
+    service.run_ingestion(resource.id, "some text", FakeChunker([_prose("a"), _prose("b"), _prose("c")]), FakeEmbedder())
 
     con = sqlite3.connect(tmp_path / "resources.db")
     count = con.execute("SELECT COUNT(*) FROM chunks WHERE resource_id=?", (resource.id,)).fetchone()[0]
@@ -271,7 +277,7 @@ def test_run_ingestion_stops_before_second_batch_when_cancelled(store):
             return [[0.1] * 384 for _ in texts]
 
     # 130 chunks → 3 batches with EMBED_BATCH=64
-    chunks = [f"chunk-{i}" for i in range(130)]
+    chunks = [_prose(f"chunk-{i}") for i in range(130)]
     resource = store.get_or_create("hash-cancel-batch", "Book")
     service = IngestionService(store=store)
     service.run_ingestion(resource.id, "text", FakeChunker(chunks), BatchCountingEmbedder(), cancel_event=cancel_event)
@@ -284,7 +290,7 @@ def test_run_ingestion_stops_before_second_batch_when_cancelled(store):
 
 
 def test_run_ingestion_without_cancel_event_runs_fully(store):
-    chunks = [f"chunk-{i}" for i in range(130)]
+    chunks = [_prose(f"chunk-{i}") for i in range(130)]
     resource = store.get_or_create("hash-no-cancel", "Book")
     service = IngestionService(store=store)
     service.run_ingestion(resource.id, "text", FakeChunker(chunks), FakeEmbedder())

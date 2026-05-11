@@ -159,9 +159,21 @@ class SemanticIngesterV2:
                 ) from exc
 
             try:
-                return resp.json()["choices"][0]["message"]["content"]
+                data = resp.json()
+            except Exception as exc:
+                raise ValidationError(
+                    f"OpenRouter response not valid JSON: {resp.text[:300]}"
+                ) from exc
+
+            if "error" in data:
+                err = data["error"]
+                msg = err.get("message", str(err)) if isinstance(err, dict) else str(err)
+                raise ValidationError(f"OpenRouter error in body: {msg}")
+
+            try:
+                return data["choices"][0]["message"]["content"]
             except (KeyError, IndexError) as exc:
-                raise RuntimeError(
+                raise ValidationError(
                     f"Unexpected OpenRouter response (missing 'choices'): {resp.text[:300]}"
                 ) from exc
 

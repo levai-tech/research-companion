@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 import threading
 from urllib.parse import urlparse, urlunparse
 
@@ -8,7 +9,10 @@ import httpx
 
 from backend.chunker import Chunker, RecursiveChunker
 from backend.embedder import Embedder, FastEmbedEmbedder
+from backend.quality_gate import ChunkQualityGate
 from backend.resource_store import ResourceStore
+
+logger = logging.getLogger(__name__)
 
 
 def _normalize_url(url: str) -> str:
@@ -28,11 +32,13 @@ class IngestionService:
         chunker: Chunker | None = None,
         embedder: Embedder | None = None,
         semantic_ingester=None,
+        quality_gate: ChunkQualityGate | None = None,
     ) -> None:
         self._store = store
         self._chunker: Chunker = chunker or RecursiveChunker()
         self._embedder: Embedder = embedder or FastEmbedEmbedder()
         self._semantic_ingester = semantic_ingester
+        self._quality_gate: ChunkQualityGate = quality_gate or ChunkQualityGate()
 
     @property
     def embedder(self) -> Embedder:
@@ -83,6 +89,9 @@ class IngestionService:
         try:
             self._store.update_step(resource_id, "chunking")
             chunks = chunker.chunk(text)
+            chunks, rejected = self._quality_gate.filter(chunks)
+            for chunk_text, reason in rejected:
+                logger.info("chunk filtered [%s]: %s", reason, chunk_text[:120])
             total = len(chunks)
             self._store.update_status(resource_id, "indexing", chunks_total=total)
             self._store.update_step(resource_id, "embedding")
