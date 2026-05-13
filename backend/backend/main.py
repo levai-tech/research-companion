@@ -220,15 +220,10 @@ def create_app(settings_path: Path | None = None, projects_dir: Path | None = No
     @app.post("/resources/file", status_code=202)
     async def post_resource_file(
         resource_type: str = "Book",
-        citation_metadata: str = Form(default="{}"),
         files: list[UploadFile] = File(...),
         project_id: str = Form(default=""),
+        titles: str = Form(default="[]"),
     ):
-        try:
-            shared_meta = json.loads(citation_metadata) if citation_metadata else {}
-        except json.JSONDecodeError:
-            shared_meta = {}
-
         contents = []
         for f in files:
             content = await f.read()
@@ -237,16 +232,23 @@ def create_app(settings_path: Path | None = None, projects_dir: Path | None = No
             contents.append(content)
 
         filenames = [f.filename or "upload" for f in files]
-        stems = [Path(name).stem for name in filenames]
-        titles = _apply_title_collision_suffixes(stems, contents)
+        try:
+            provided_titles: list[str] = json.loads(titles)
+        except (json.JSONDecodeError, TypeError):
+            provided_titles = []
+        if len(provided_titles) == len(files):
+            resolved_titles = provided_titles
+        else:
+            stems = [Path(name).stem for name in filenames]
+            resolved_titles = _apply_title_collision_suffixes(stems, contents)
 
         si_cfg = settings.get().get("roles", {}).get("semantic_ingester", {})
         si_model = si_cfg.get("model")
         si_key = settings.get_key("openrouter_api_key") if si_model else None
 
         results = []
-        for content, filename, title in zip(contents, filenames, titles):
-            file_meta = {**shared_meta, "title": title}
+        for content, filename, title in zip(contents, filenames, resolved_titles):
+            file_meta = {"title": title}
             result = ingestion_service.accept_file(
                 content=content,
                 resource_type=resource_type,

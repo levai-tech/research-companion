@@ -35,63 +35,6 @@ const s = {
   } as React.CSSProperties,
 };
 
-function BookFields({ meta, setMeta }: { meta: Record<string, string>; setMeta: (k: string, v: string) => void }) {
-  return (
-    <>
-      <Field label="Author(s)" id="author" value={meta.author ?? ""} onChange={(v) => setMeta("author", v)} />
-      <Field label="Title" id="title" value={meta.title ?? ""} onChange={(v) => setMeta("title", v)} />
-      <Field label="Edition" id="edition" value={meta.edition ?? ""} onChange={(v) => setMeta("edition", v)} />
-      <Field label="Publisher" id="publisher" value={meta.publisher ?? ""} onChange={(v) => setMeta("publisher", v)} />
-      <Field label="Publication Date" id="publication_date" value={meta.publication_date ?? ""} onChange={(v) => setMeta("publication_date", v)} />
-      <Field label="ISBN (optional)" id="isbn" value={meta.isbn ?? ""} onChange={(v) => setMeta("isbn", v)} />
-    </>
-  );
-}
-
-function ArticleFields({ meta, setMeta }: { meta: Record<string, string>; setMeta: (k: string, v: string) => void }) {
-  return (
-    <>
-      <Field label="Author(s)" id="author" value={meta.author ?? ""} onChange={(v) => setMeta("author", v)} />
-      <Field label="Article Title" id="article_title" value={meta.article_title ?? ""} onChange={(v) => setMeta("article_title", v)} />
-      <Field label="Journal / Outlet name" id="journal" value={meta.journal ?? ""} onChange={(v) => setMeta("journal", v)} />
-      <Field label="Volume" id="volume" value={meta.volume ?? ""} onChange={(v) => setMeta("volume", v)} />
-      <Field label="Issue" id="issue" value={meta.issue ?? ""} onChange={(v) => setMeta("issue", v)} />
-      <Field label="Publication Date" id="publication_date" value={meta.publication_date ?? ""} onChange={(v) => setMeta("publication_date", v)} />
-      <Field label="Page Range" id="page_range" value={meta.page_range ?? ""} onChange={(v) => setMeta("page_range", v)} />
-    </>
-  );
-}
-
-function WebpageFields({ meta, setMeta }: { meta: Record<string, string>; setMeta: (k: string, v: string) => void }) {
-  return (
-    <>
-      <Field label="Author or Organisation" id="author" value={meta.author ?? ""} onChange={(v) => setMeta("author", v)} />
-      <Field label="Page Title" id="page_title" value={meta.page_title ?? ""} onChange={(v) => setMeta("page_title", v)} />
-      <Field label="Site Name" id="site_name" value={meta.site_name ?? ""} onChange={(v) => setMeta("site_name", v)} />
-      <Field label="Publication Date" id="publication_date" value={meta.publication_date ?? ""} onChange={(v) => setMeta("publication_date", v)} />
-    </>
-  );
-}
-
-function TranscriptFields({ meta, setMeta }: { meta: Record<string, string>; setMeta: (k: string, v: string) => void }) {
-  return (
-    <>
-      <Field label="Attendees" id="attendees" value={meta.attendees ?? ""} onChange={(v) => setMeta("attendees", v)} />
-      <Field label="Meeting Title" id="meeting_title" value={meta.meeting_title ?? ""} onChange={(v) => setMeta("meeting_title", v)} />
-      <Field label="Date" id="date" value={meta.date ?? ""} onChange={(v) => setMeta("date", v)} />
-    </>
-  );
-}
-
-function Field({ label, id, value, onChange }: { label: string; id: string; value: string; onChange: (v: string) => void }) {
-  return (
-    <div style={s.field}>
-      <label htmlFor={id} style={s.label}>{label}</label>
-      <input id={id} type="text" value={value} onChange={(e) => onChange(e.target.value)} style={s.input} />
-    </div>
-  );
-}
-
 function stemOf(filename: string): string {
   return filename.replace(/\.[^.]+$/, "");
 }
@@ -126,7 +69,6 @@ export default function AddResourceModal({ projectId, onClose, onResourceAdded }
   const [files, setFiles] = useState<File[]>([]);
   const [fileTitles, setFileTitles] = useState<string[]>([]);
   const [url, setUrl] = useState("");
-  const [meta, setMetaState] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -137,10 +79,6 @@ export default function AddResourceModal({ projectId, onClose, onResourceAdded }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
-
-  function setMeta(k: string, v: string) {
-    setMetaState((prev) => ({ ...prev, [k]: v }));
-  }
 
   function handleFilesChange(picked: FileList | null) {
     const arr = picked ? Array.from(picked) : [];
@@ -161,18 +99,14 @@ export default function AddResourceModal({ projectId, onClose, onResourceAdded }
         const form = new FormData();
         files.forEach((f) => form.append("files", f));
         form.append("resource_type", fileResourceType);
-        const cleanMeta = Object.fromEntries(Object.entries(meta).filter(([, v]) => v !== ""));
-        if (Object.keys(cleanMeta).length > 0) {
-          form.append("citation_metadata", JSON.stringify(cleanMeta));
-        }
+        form.append("titles", JSON.stringify(fileTitles));
         if (projectId) form.append("project_id", projectId);
         response = await fetch(`http://127.0.0.1:${port}/resources/file`, { method: "POST", body: form });
       } else {
-        const cleanMeta = Object.fromEntries(Object.entries(meta).filter(([, v]) => v !== ""));
         response = await fetch(`http://127.0.0.1:${port}/resources/url`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ url, citation_metadata: cleanMeta }),
+          body: JSON.stringify({ url }),
         });
       }
       if (!response.ok) throw new Error(`Server error ${response.status}`);
@@ -221,7 +155,7 @@ export default function AddResourceModal({ projectId, onClose, onResourceAdded }
           {/* File path */}
           {mode === "file" && (
             <>
-              {/* Dropzone — input is an invisible full-size overlay so click and upload both work */}
+              {/* Dropzone */}
               <div style={{ position: "relative", border: "1.5px dashed var(--border-strong)", borderRadius: 10, padding: "26px 14px", textAlign: "center", color: "var(--foreground-muted)", fontSize: 13, background: "var(--surface-sunken)", display: "flex", flexDirection: "column", alignItems: "center", gap: 8, cursor: "pointer", fontFamily: "var(--font-sans)" }}>
                 <Upload size={22} style={{ color: "var(--foreground-muted)" }} />
                 <div>
@@ -280,34 +214,26 @@ export default function AddResourceModal({ projectId, onClose, onResourceAdded }
                   ))}
                 </div>
               </div>
-
-              {/* Metadata fields */}
-              {fileResourceType === "Book" && <BookFields meta={meta} setMeta={setMeta} />}
-              {fileResourceType === "Press/Journal Article" && <ArticleFields meta={meta} setMeta={setMeta} />}
-              {fileResourceType === "Source Transcript" && <TranscriptFields meta={meta} setMeta={setMeta} />}
             </>
           )}
 
           {/* URL path */}
           {mode === "url" && (
-            <>
-              <div style={s.field}>
-                <label htmlFor="url-input" style={s.label}>URL</label>
-                <input
-                  id="url-input"
-                  type="url"
-                  value={url}
-                  onChange={(e) => setUrl(e.target.value)}
-                  placeholder="https://…"
-                  aria-label="URL"
-                  style={s.input}
-                />
-                <p style={{ fontSize: 12, color: "var(--foreground-muted)", margin: 0 }}>
-                  Resource type: <span style={{ fontWeight: 600, color: "var(--foreground)" }}>Webpage</span>
-                </p>
-              </div>
-              <WebpageFields meta={meta} setMeta={setMeta} />
-            </>
+            <div style={s.field}>
+              <label htmlFor="url-input" style={s.label}>URL</label>
+              <input
+                id="url-input"
+                type="url"
+                value={url}
+                onChange={(e) => setUrl(e.target.value)}
+                placeholder="https://…"
+                aria-label="URL"
+                style={s.input}
+              />
+              <p style={{ fontSize: 12, color: "var(--foreground-muted)", margin: 0 }}>
+                Resource type: <span style={{ fontWeight: 600, color: "var(--foreground)" }}>Webpage</span>
+              </p>
+            </div>
           )}
         </div>
 
