@@ -151,6 +151,17 @@ describe("Sidebar — delete confirmation", () => {
   });
 });
 
+// ── Behavior 12: Search resources button calls onOpenSearch ──────────────────
+
+describe("Sidebar — search resources button", () => {
+  it("calls onOpenSearch when Search resources is clicked", () => {
+    const onOpenSearch = vi.fn();
+    renderSidebar({ onOpenSearch });
+    fireEvent.click(screen.getByRole("button", { name: /search resources/i }));
+    expect(onOpenSearch).toHaveBeenCalledTimes(1);
+  });
+});
+
 // ── Behavior 8: footer ────────────────────────────────────────────────────────
 
 describe("Sidebar — footer", () => {

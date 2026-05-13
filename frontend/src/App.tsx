@@ -9,6 +9,7 @@ import ProjectWorkspace from "./components/ProjectWorkspace";
 import ResourcesTab from "./components/ResourcesTab";
 import SettingsPage from "./components/SettingsPage";
 import JobTray from "./components/JobTray";
+import ResourcesPanel from "./components/ResourcesPanel";
 import { useViewStore } from "./viewStore";
 import type { Project } from "./hooks/useProjects";
 
@@ -25,6 +26,10 @@ export default function App() {
       if (e.key === "n" && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
         navigate("home", null);
+      }
+      if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        setResourcesPanelOpen((open) => !open);
       }
     },
     [navigate],
@@ -66,6 +71,7 @@ export default function App() {
         onNavigate={(v: AppView) => navigate(v, v === "home" ? null : activeProjectId)}
         onSelectProject={(id) => selectProject(id)}
         onDeleteProject={handleDeleteProject}
+        onOpenSearch={() => setResourcesPanelOpen(true)}
       />
 
       <div className="flex-1 flex flex-col min-h-0">
@@ -96,6 +102,10 @@ export default function App() {
         </main>
         <JobTray projectId={activeProjectId ?? ""} />
       </div>
+      <ResourcesPanel
+        open={resourcesPanelOpen}
+        onClose={() => setResourcesPanelOpen(false)}
+      />
     </div>
   );
 }

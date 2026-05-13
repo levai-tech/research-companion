@@ -12,6 +12,7 @@ interface Props {
   onNavigate: (view: AppView) => void;
   onSelectProject: (id: string) => void;
   onDeleteProject: (id: string) => void;
+  onOpenSearch?: () => void;
 }
 
 interface ContextMenu {
@@ -27,6 +28,7 @@ export default function Sidebar({
   onNavigate,
   onSelectProject,
   onDeleteProject,
+  onOpenSearch,
 }: Props) {
   const displayName = useSettingsStore((s) => s.settings?.display_name ?? "You");
   const [contextMenu, setContextMenu] = useState<ContextMenu | null>(null);
@@ -95,7 +97,7 @@ export default function Sidebar({
           </button>
           <button
             className="flex items-center gap-2 h-9 px-2.5 rounded-md text-sm font-medium text-left transition-colors hover:bg-muted"
-            onClick={() => {/* no-op: search modal not yet implemented */}}
+            onClick={() => onOpenSearch?.()}
           >
             <Search className="h-4 w-4" />
             <span className="flex-1">Search resources</span>

@@ -92,6 +92,47 @@ describe("App — ⌘N shortcut", () => {
   });
 });
 
+// ── Behavior 12: ⌘K/Ctrl+K toggles ResourcesPanel ───────────────────────────
+
+describe("App — ⌘K shortcut", () => {
+  it("opens the ResourcesPanel when Ctrl+K is pressed", () => {
+    mockFetch([]);
+    render(<App />);
+
+    expect(screen.queryByTestId("resources-panel-scrim")).toBeNull();
+
+    fireEvent.keyDown(document, { key: "k", ctrlKey: true });
+
+    expect(screen.getByTestId("resources-panel-scrim")).toBeInTheDocument();
+  });
+
+  it("closes the ResourcesPanel when Ctrl+K is pressed while it is open", () => {
+    mockFetch([]);
+    render(<App />);
+
+    fireEvent.keyDown(document, { key: "k", ctrlKey: true });
+    expect(screen.getByTestId("resources-panel-scrim")).toBeInTheDocument();
+
+    fireEvent.keyDown(document, { key: "k", ctrlKey: true });
+    expect(screen.queryByTestId("resources-panel-scrim")).toBeNull();
+  });
+});
+
+// ── Behavior 13: sidebar search button opens ResourcesPanel ───────────────────
+
+describe("App — sidebar search button", () => {
+  it("opens the ResourcesPanel when Search resources is clicked", () => {
+    mockFetch([]);
+    render(<App />);
+
+    expect(screen.queryByTestId("resources-panel-scrim")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: /search resources/i }));
+
+    expect(screen.getByTestId("resources-panel-scrim")).toBeInTheDocument();
+  });
+});
+
 // ── Behavior 11: JobTray globally visible ─────────────────────────────────────
 
 describe("App — JobTray", () => {
