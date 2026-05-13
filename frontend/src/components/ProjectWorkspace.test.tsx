@@ -1,8 +1,10 @@
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import ProjectWorkspace from "./ProjectWorkspace";
 import { useAppStore } from "../store";
 import { useJobTrayStore } from "../jobTrayStore";
+import { useViewStore } from "../viewStore";
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(),
@@ -48,10 +50,12 @@ function mockFetch({
   approach = null,
   transcript = TRANSCRIPT,
   outline = { sections: [] },
+  resourceCount = 0,
 }: {
   approach?: object | null;
   transcript?: object | null;
   outline?: object;
+  resourceCount?: number;
 } = {}) {
   global.fetch = vi.fn().mockImplementation((url: string) => {
     if (url.endsWith("/approach")) {
@@ -72,6 +76,12 @@ function mockFetch({
       return Promise.resolve({
         ok: true,
         json: () => Promise.resolve(outline),
+      } as Response);
+    }
+    if (url.endsWith("/resources")) {
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve(Array.from({ length: resourceCount }, (_, i) => ({ id: `r-${i}` }))),
       } as Response);
     }
     return Promise.resolve({ ok: true, json: () => Promise.resolve({}) } as Response);
@@ -147,7 +157,54 @@ describe("ProjectWorkspace — approach tab navigation", () => {
   });
 });
 
-// ── Behavior 1: 4 tabs render in order ───────────────────────────────────────
+// ── Behavior 5: completion badges ────────────────────────────────────────────
+
+describe("ProjectWorkspace — tab badges", () => {
+  it("shows ✓ badge on Transcript tab when transcript exists", async () => {
+    mockFetch({ transcript: TRANSCRIPT });
+    render(<ProjectWorkspace project={PROJECT} onBack={vi.fn()} />);
+
+    await screen.findByText("The author wants to write about quantum threats to encryption.");
+
+    const transcriptTab = screen.getByRole("button", { name: /^transcript/i });
+    expect(transcriptTab).toHaveTextContent("✓");
+  });
+
+  it("does not show ✓ badge on Transcript tab when no transcript", async () => {
+    mockFetch({ transcript: null });
+    render(<ProjectWorkspace project={PROJECT} onBack={vi.fn()} />);
+
+    await screen.findAllByRole("button", { name: /transcript/i });
+
+    const transcriptTab = screen.getByRole("button", { name: /^transcript/i });
+    expect(transcriptTab).not.toHaveTextContent("✓");
+  });
+});
+
+// ── Behavior 6: Resources chip in header ─────────────────────────────────────
+
+describe("ProjectWorkspace — Resources chip", () => {
+  it("shows 'Resources · N' chip with the project's resource count", async () => {
+    mockFetch({ resourceCount: 3 });
+    render(<ProjectWorkspace project={PROJECT} onBack={vi.fn()} />);
+
+    await screen.findByText(/resources\s*·\s*3/i);
+  });
+
+  it("clicking Resources chip navigates to resources view with the project id", async () => {
+    mockFetch({ resourceCount: 2 });
+    render(<ProjectWorkspace project={PROJECT} onBack={vi.fn()} />);
+
+    const chip = await screen.findByText(/resources\s*·\s*2/i);
+    await userEvent.click(chip);
+
+    const { view, activeProjectId } = useViewStore.getState();
+    expect(view).toBe("resources");
+    expect(activeProjectId).toBe(PROJECT.id);
+  });
+});
+
+// ── Behavior 1: 4 tabs render in order, no Resources tab ─────────────────────
 
 describe("ProjectWorkspace — tab structure", () => {
   it("renders 4 tabs in order: Transcript, Approach, Outline, Editor", async () => {
@@ -158,7 +215,7 @@ describe("ProjectWorkspace — tab structure", () => {
       name: /transcript|approach|outline|editor/i,
     });
 
-    const tabLabels = tabs.map((t) => t.textContent?.trim().toLowerCase());
+    const tabLabels = tabs.map((t) => t.textContent?.replace("✓", "").trim().toLowerCase());
     expect(tabLabels).toContain("transcript");
     expect(tabLabels).toContain("approach");
     expect(tabLabels).toContain("outline");
@@ -172,5 +229,14 @@ describe("ProjectWorkspace — tab structure", () => {
     expect(transcriptIdx).toBeLessThan(approachIdx);
     expect(approachIdx).toBeLessThan(outlineIdx);
     expect(outlineIdx).toBeLessThan(editorIdx);
+  });
+
+  it("does not render a Resources tab", async () => {
+    mockFetch();
+    render(<ProjectWorkspace project={PROJECT} onBack={vi.fn()} />);
+
+    await screen.findAllByRole("button", { name: /transcript/i });
+
+    expect(screen.queryByRole("button", { name: /^resources$/i })).toBeNull();
   });
 });

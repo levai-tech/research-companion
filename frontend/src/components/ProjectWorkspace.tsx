@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 import { useAppStore } from "../store";
+import { useViewStore } from "../viewStore";
 import type { Project } from "../hooks/useProjects";
 import ApproachExplorer from "./ApproachExplorer";
 import OutlineGenerator from "./OutlineGenerator";
 import BlockEditor from "./BlockEditor";
-import ResourcesTab from "./ResourcesTab";
 import { outlineToDoc } from "../utils/outlineToDoc";
 
 interface Approach {
@@ -33,7 +33,7 @@ interface Outline {
   sections: OutlineSection[];
 }
 
-type Tab = "transcript" | "approach" | "outline" | "editor" | "resources";
+type Tab = "transcript" | "approach" | "outline" | "editor";
 
 interface Props {
   project: Project;
@@ -41,9 +41,11 @@ interface Props {
 
 export default function ProjectWorkspace({ project }: Props) {
   const port = useAppStore((s) => s.backendPort);
+  const navigate = useViewStore((s) => s.navigate);
   const [approach, setApproach] = useState<Approach | null>(null);
   const [transcript, setTranscript] = useState<Transcript | null>(null);
   const [outline, setOutline] = useState<Outline | null>(null);
+  const [resourceCount, setResourceCount] = useState(0);
   const [tab, setTab] = useState<Tab>("transcript");
   const [isLoading, setIsLoading] = useState(true);
 
@@ -53,10 +55,12 @@ export default function ProjectWorkspace({ project }: Props) {
       fetch(`http://127.0.0.1:${port}/projects/${project.id}/approach`).then((r) => r.json()),
       fetch(`http://127.0.0.1:${port}/projects/${project.id}/transcript`).then((r) => r.status === 404 ? null : r.json()),
       fetch(`http://127.0.0.1:${port}/projects/${project.id}/outline`).then((r) => r.json()),
-    ]).then(([approachData, transcriptData, outlineData]: [Approach | null, Transcript | null, Outline]) => {
+      fetch(`http://127.0.0.1:${port}/projects/${project.id}/resources`).then((r) => r.json()),
+    ]).then(([approachData, transcriptData, outlineData, resourcesData]: [Approach | null, Transcript | null, Outline, unknown[]]) => {
       setApproach(approachData);
       setTranscript(transcriptData);
       setOutline(outlineData);
+      setResourceCount(Array.isArray(resourcesData) ? resourcesData.length : 0);
     }).finally(() => setIsLoading(false));
   }, [port, project.id]);
 
@@ -96,11 +100,17 @@ export default function ProjectWorkspace({ project }: Props) {
           <h1 className="font-semibold">{project.title}</h1>
           <p className="text-xs text-muted-foreground capitalize">{project.document_type} · {project.topic}</p>
         </div>
+        <button
+          className="h-8 px-3 rounded-lg border text-xs font-medium flex items-center gap-1.5 hover:bg-muted transition-colors"
+          onClick={() => navigate("resources", project.id)}
+        >
+          Resources · {resourceCount}
+        </button>
       </div>
 
       {/* Tab nav */}
       <div className="flex gap-1 border-b px-6 pt-2">
-        {(["transcript", "approach", "outline", "editor", "resources"] as Tab[]).map((t) => (
+        {(["transcript", "approach", "outline", "editor"] as Tab[]).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -111,6 +121,9 @@ export default function ProjectWorkspace({ project }: Props) {
             }`}
           >
             {t}
+            {t === "transcript" && transcript && (
+              <span className="ml-1.5 text-xs text-green-600">✓</span>
+            )}
             {t === "approach" && approach && (
               <span className="ml-1.5 text-xs text-green-600">✓</span>
             )}
@@ -164,10 +177,6 @@ export default function ProjectWorkspace({ project }: Props) {
 
         {tab === "editor" && (
           <BlockEditor projectId={project.id} />
-        )}
-
-        {tab === "resources" && (
-          <ResourcesTab projectId={project.id} />
         )}
 
         {tab === "outline" && (
