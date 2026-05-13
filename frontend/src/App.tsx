@@ -6,7 +6,7 @@ import Sidebar, { type AppView } from "./components/Sidebar";
 import HomeScreen from "./components/HomeScreen";
 import Interview from "./components/Interview";
 import ProjectWorkspace from "./components/ProjectWorkspace";
-import ResourcesTab from "./components/ResourcesTab";
+import ResourcesPage from "./components/ResourcesPage";
 import SettingsPage from "./components/SettingsPage";
 import JobTray from "./components/JobTray";
 import ResourcesPanel from "./components/ResourcesPanel";
@@ -92,7 +92,7 @@ export default function App() {
           {view === "workspace" && activeProject && (
             <ProjectWorkspace project={activeProject} />
           )}
-          {view === "resources" && <ResourcesTab projectId={activeProjectId ?? ""} />}
+          {view === "resources" && <ResourcesPage initialFilterId={activeProjectId ?? undefined} />}
           {view === "settings" && <SettingsPage />}
           {view === "account" && (
             <div className="p-8">
