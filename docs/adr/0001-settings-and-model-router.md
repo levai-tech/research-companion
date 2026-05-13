@@ -24,13 +24,15 @@ Five Agent Roles need to call LLMs. Originally the plan called for separate Anth
 
 ---
 
-### 2. Tier-based model selection (not free-form)
+### 2. Raw model ID entry per role ~~(was: Tier-based model selection)~~
 
-**Decision:** Users select `"free"` or `"paid"` per Agent Role. The Model Router resolves this to a concrete model ID using the hardcoded Catalogue. Users never enter raw model IDs.
+> **Amended 2026-05-13:** Decision reversed. See rationale below.
 
-**Rationale:** Prevents misconfiguration (invalid model IDs, choosing a coding model for creative writing). Allows us to update the Catalogue to better models without requiring user action.
+**Decision:** Users enter a raw OpenRouter model ID per Agent Role in Settings. The Catalogue becomes a set of read-only *defaults* shown in the Settings UI, not locked values. Settings stores `{"model_id": "..."}` per role. The Tier/free/paid toggle is removed.
 
-**Catalogue is in code, not in settings.json.** Settings only stores `{"tier": "free"|"paid"}` per role.
+**Rationale:** The buddy UI kit (canonical hi-fi reference) exposes raw model IDs. Power users on a local-first desktop app are the target audience and benefit from direct control — they know what `anthropic/claude-opus-4.7` means. Invalid IDs surface as an OpenRouter error on first use, which is acceptable for this audience. The Catalogue defaults guide users without constraining them.
+
+**Catalogue is in code as defaults only.** Settings stores `{"model_id": "..."}` per role; if absent, the Catalogue default is used.
 
 ---
 
@@ -66,9 +68,11 @@ Five Agent Roles need to call LLMs. Originally the plan called for separate Anth
 
 ---
 
-### 6. Settings UI — cog icon → settings page
+### 6. Settings UI — sidebar nav → settings page
 
-**Decision:** A gear icon in the app header navigates to a dedicated Settings page (not a modal). The page has three sections: **API Keys**, **Model Router** (tier per role), and **Ollama**.
+> **Amended 2026-05-13:** Settings is now reached via the sidebar nav button, not a header cog icon, per the buddy layout.
+
+**Decision:** A Settings nav button in the sidebar navigates to a dedicated Settings page (not a modal). The page has three sections: **API Keys**, **Model Router** (raw model ID per role, with Catalogue defaults shown), and **Search Provider**.
 
 **Rationale:** A full page gives room to grow (future: proxy settings, export options). A modal would feel cramped with five role rows plus multiple key fields.
 
@@ -79,7 +83,7 @@ Five Agent Roles need to call LLMs. Originally the plan called for separate Anth
 | Alternative | Reason rejected |
 |-------------|----------------|
 | Separate Anthropic + Google SDK clients | Two API keys, two clients, harder to add new providers |
-| Free-form model ID input | Too easy to misconfigure; no guard against invalid IDs |
+| Free-form model ID input | ~~Too easy to misconfigure~~ — reversed in 2026-05-13 amendment; see Decision #2 |
 | Encrypt settings.json | Non-sensitive data; adds complexity for no benefit |
 | Tauri plugin-stronghold for key storage | Complex setup; `keyring` covers all platforms with one line |
 | Settings in a modal/drawer | Not enough space for all sections; page scales better |

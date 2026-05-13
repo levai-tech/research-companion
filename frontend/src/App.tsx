@@ -1,4 +1,4 @@
-import { useEffect, useCallback } from "react";
+import { useEffect, useCallback, useState } from "react";
 import { useBackendPort } from "./hooks/useBackendPort";
 import { useProjects } from "./hooks/useProjects";
 import { useAppStore } from "./store";
@@ -15,6 +15,7 @@ export default function App() {
   const port = useAppStore((s) => s.backendPort);
   const { view, activeProjectId, navigate, selectProject } = useViewStore();
   const { projects, refetch } = useProjects();
+  const [resourcesPanelOpen, setResourcesPanelOpen] = useState(false);
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
@@ -56,7 +57,13 @@ export default function App() {
 
       <div className="flex-1 flex flex-col min-h-0">
         <main className="flex-1 min-h-0 overflow-y-auto">
-          {view === "home" && <HomeScreen onProjectCreated={refetch} />}
+          {view === "home" && (
+            <HomeScreen
+              projectCount={projects.length}
+              onSendMessage={(_text) => { /* wired in #69 */ }}
+              onOpenSearch={() => setResourcesPanelOpen(true)}
+            />
+          )}
           {view === "workspace" && activeProject && (
             <ProjectWorkspace project={activeProject} />
           )}

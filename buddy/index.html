@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Buddy · Levai UI Kit</title>
+  <link rel="stylesheet" href="../../colors_and_type.css" />
+  <style>
+    html, body, #root { height: 100%; margin: 0; padding: 0; }
+    body { background: var(--background); overflow: hidden; }
+    /* Resource panel enter animation */
+    @keyframes buddyPanelIn {
+      from { opacity: 0; transform: translateX(16px); }
+      to   { opacity: 1; transform: translateX(0); }
+    }
+    @keyframes buddyScrimIn {
+      from { opacity: 0; }
+      to   { opacity: 1; }
+    }
+    @keyframes buddyModalIn {
+      from { opacity: 0; transform: translateY(8px) scale(0.98); }
+      to   { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    /* Thinking dots animation (used by ChatTurn) */
+    .dots { display: inline-flex; gap: 3px; margin-left: 6px; vertical-align: middle; }
+    .dots i {
+      width: 4px; height: 4px; border-radius: 2px; background: currentColor;
+      opacity: 0.4;
+      animation: dot 1.2s infinite cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .dots i:nth-child(2) { animation-delay: 150ms; }
+    .dots i:nth-child(3) { animation-delay: 300ms; }
+    @keyframes dot {
+      0%, 60%, 100% { opacity: 0.3; transform: translateY(0); }
+      30% { opacity: 1; transform: translateY(-2px); }
+    }
+    /* Scrollbar refinements */
+    ::-webkit-scrollbar { width: 10px; height: 10px; }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(6, 31, 55, 0.12);
+      border-radius: 999px;
+      border: 2px solid transparent;
+      background-clip: padding-box;
+    }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(6, 31, 55, 0.2); background-clip: padding-box; border: 2px solid transparent; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    /* Reset button defaults so React inline styles win cleanly */
+    button { font: inherit; color: inherit; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <script type="text/babel" src="icons.jsx"></script>
+  <script type="text/babel" src="ChatTurn.jsx"></script>
+  <script type="text/babel" src="Composer.jsx"></script>
+  <script type="text/babel" src="ResourcesPanel.jsx"></script>
+  <script type="text/babel" src="ResourcesPage.jsx"></script>
+  <script type="text/babel" src="HomeChat.jsx"></script>
+  <script type="text/babel" src="Workspace.jsx"></script>
+  <script type="text/babel" src="SettingsPage.jsx"></script>
+  <script type="text/babel" src="Sidebar.jsx"></script>
+  <script type="text/babel" src="app.jsx"></script>
+</body>
+</html>

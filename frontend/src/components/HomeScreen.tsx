@@ -1,93 +1,192 @@
-import { useState } from "react";
-import { Trash2 } from "lucide-react";
-import { useProjects, type Project } from "../hooks/useProjects";
+import { useState, useEffect } from "react";
 import { useAppStore } from "../store";
-import Interview from "./Interview";
+import Composer from "./Composer";
 
-function ProjectCard({ project, onClick, onDelete }: { project: Project; onClick: () => void; onDelete: () => void }) {
-  return (
-    <div className="relative group rounded border hover:bg-muted/50 transition-colors">
-      <button className="w-full p-4 text-left" onClick={onClick}>
-        <h3 className="font-semibold">{project.title}</h3>
-        <p className="text-sm text-muted-foreground capitalize">{project.document_type}</p>
-        <p className="text-xs text-muted-foreground">
-          {new Date(project.last_modified).toLocaleDateString()}
-        </p>
-      </button>
-      <button
-        aria-label="Delete project"
-        className="absolute top-2 right-2 p-1.5 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
-        onClick={(e) => { e.stopPropagation(); onDelete(); }}
-      >
-        <Trash2 className="h-4 w-4" />
-      </button>
-    </div>
-  );
-}
+const SUGGESTIONS = [
+  "A 4,000-word feature for a magazine",
+  "A literature review for my dissertation",
+  "An op-ed pitching a contrarian take",
+  "A reported essay with on-the-record sources",
+];
 
 interface Props {
-  onProjectCreated?: () => void;
+  projectCount: number;
+  onSendMessage: (text: string) => void;
+  onOpenSearch: () => void;
 }
 
-export default function HomeScreen({ onProjectCreated }: Props) {
-  const { projects, isLoading, refetch } = useProjects();
+export default function HomeScreen({ projectCount, onSendMessage, onOpenSearch }: Props) {
   const port = useAppStore((s) => s.backendPort);
-  const [showNewProject, setShowNewProject] = useState(false);
+  const [input, setInput] = useState("");
+  const [resourceCount, setResourceCount] = useState(0);
 
-  function handleProjectCreated() {
-    refetch();
-    onProjectCreated?.();
-    setShowNewProject(false);
-  }
-
-  function deleteProject(projectId: string) {
+  useEffect(() => {
     if (!port) return;
-    fetch(`http://127.0.0.1:${port}/projects/${projectId}`, { method: "DELETE" })
-      .then(() => refetch());
-  }
+    fetch(`http://127.0.0.1:${port}/resources`)
+      .then((r) => r.json())
+      .then((data: unknown[]) => setResourceCount(data.length))
+      .catch(() => {});
+  }, [port]);
 
-  if (showNewProject) {
-    return (
-      <div className="flex flex-col h-full">
-        <div className="flex items-center gap-3 border-b px-6 py-3">
-          <button
-            className="text-sm text-muted-foreground hover:text-foreground"
-            onClick={() => setShowNewProject(false)}
-          >
-            ← Back
-          </button>
-          <span className="font-medium">New Project</span>
-        </div>
-        <div className="flex-1 overflow-y-auto">
-          <Interview onProjectCreated={handleProjectCreated} />
-        </div>
-      </div>
-    );
+  function send(text: string) {
+    if (!text.trim()) return;
+    onSendMessage(text.trim());
+    setInput("");
   }
-
-  if (isLoading) return <div className="p-6">Loading…</div>;
 
   return (
-    <div className="p-6">
-      <div className="mb-4 flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Projects</h1>
-        <button
-          className="rounded bg-primary px-4 py-2 text-primary-foreground"
-          onClick={() => setShowNewProject(true)}
+    <div
+      style={{
+        height: "100%",
+        display: "flex",
+        flexDirection: "column",
+        position: "relative",
+        background: "var(--background)",
+      }}
+    >
+      <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "32px 24px 140px" }}>
+        <div
+          style={{
+            maxWidth: 720,
+            margin: "0 auto",
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "center",
+            minHeight: "100%",
+          }}
         >
-          New Project
-        </button>
+          <div style={{ textAlign: "center", padding: "40px 16px 32px" }}>
+            <div
+              style={{
+                width: 64,
+                height: 64,
+                margin: "0 auto 24px",
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <img
+                src="../../assets/logo-mark-square.png"
+                alt=""
+                style={{ width: "100%", height: "100%", objectFit: "contain" }}
+              />
+            </div>
+
+            <h1
+              style={{
+                fontFamily: "var(--font-sans)",
+                fontSize: 32,
+                lineHeight: 1.15,
+                letterSpacing: "-0.02em",
+                fontWeight: 600,
+                color: "var(--foreground)",
+                margin: "0 0 8px",
+              }}
+            >
+              What are you working on?
+            </h1>
+
+            <p
+              style={{
+                fontFamily: "var(--font-sans)",
+                fontSize: 16,
+                lineHeight: 1.5,
+                color: "var(--foreground-muted)",
+                margin: "0 auto",
+                maxWidth: 480,
+              }}
+            >
+              Tell me about the piece in a couple of sentences and I'll ask follow-ups. Buddy turns
+              the conversation into an outline grounded in your sources.
+            </p>
+
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: 8,
+                justifyContent: "center",
+                marginTop: 28,
+                marginBottom: 8,
+              }}
+            >
+              {SUGGESTIONS.map((s) => (
+                <button
+                  key={s}
+                  onClick={() => send(s)}
+                  style={{
+                    fontFamily: "var(--font-sans)",
+                    fontSize: 12,
+                    color: "var(--foreground)",
+                    background: "var(--surface)",
+                    border: "1px solid var(--border)",
+                    borderRadius: 999,
+                    padding: "6px 12px",
+                    cursor: "pointer",
+                  }}
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
+
+            <button
+              aria-label="Search your library"
+              onClick={onOpenSearch}
+              style={{
+                marginTop: 36,
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 8,
+                padding: "6px 12px",
+                border: "1px solid transparent",
+                background: "transparent",
+                borderRadius: 999,
+                fontFamily: "var(--font-sans)",
+                fontSize: 12,
+                color: "var(--foreground-muted)",
+                cursor: "pointer",
+              }}
+            >
+              Search your library — {resourceCount} resources across {projectCount} projects
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: 10 }}>⌘K</span>
+            </button>
+          </div>
+        </div>
       </div>
 
-      {projects.length === 0 ? (
-        <p>No projects yet — start one with the button above.</p>
-      ) : (
-        <div className="grid gap-4">
-          {projects.map((p) => (
-            <ProjectCard key={p.id} project={p} onClick={() => {}} onDelete={() => deleteProject(p.id)} />
-          ))}
+      <div
+        style={{
+          position: "absolute",
+          left: 0,
+          right: 0,
+          bottom: 0,
+          padding: "16px 24px 22px",
+          background: "linear-gradient(to top, var(--background) 60%, transparent)",
+          pointerEvents: "none",
+        }}
+      >
+        <div style={{ maxWidth: 720, margin: "0 auto", pointerEvents: "auto" }}>
+          <Composer
+            placeholder="Describe the piece — a magazine feature on…"
+            value={input}
+            onChange={setInput}
+            onSend={() => send(input)}
+          />
+          <p
+            style={{
+              textAlign: "center",
+              fontFamily: "var(--font-sans)",
+              fontSize: 11,
+              color: "var(--foreground-muted)",
+              marginTop: 8,
+            }}
+          >
+            Buddy will ask 3–5 follow-ups before suggesting an approach.
+          </p>
         </div>
-      )}
+      </div>
     </div>
   );
 }
