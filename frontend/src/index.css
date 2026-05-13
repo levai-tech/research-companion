@@ -1,5 +1,21 @@
+@import "./styles/tokens.css";
 @import "tailwindcss";
 @plugin "@tailwindcss/typography";
+
+@theme {
+  --color-brand-cyan-400: var(--brand-cyan-400);
+  --color-brand-cyan-500: var(--brand-cyan-500);
+  --color-brand-cyan-600: var(--brand-cyan-600);
+  --color-brand-navy-700: var(--brand-navy-700);
+  --color-brand-navy-800: var(--brand-navy-800);
+  --color-background:     var(--background);
+  --color-surface:        var(--surface);
+  --color-foreground:     var(--foreground);
+  --color-sidebar:        var(--sidebar);
+  --font-family-sans:     var(--font-sans);
+  --font-family-mono:     var(--font-mono);
+  --font-family-serif:    var(--font-serif);
+}
 
 /* TipTap editor: reset Tailwind's preflight within the prose editor so headings
    and lists render with visible hierarchy even before the typography plugin styles
