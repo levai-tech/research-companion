@@ -142,3 +142,24 @@ def test_try_extract_returns_none_for_empty_string():
 def test_try_extract_returns_none_for_non_ready_json():
     result = _try_extract_ready_payload('{"phase": "chat", "message": "Tell me more."}')
     assert result is None
+
+
+# ── Behavior 8: POST /interview/suggest-title ─────────────────────────────────
+
+async def test_suggest_title_returns_short_title(app):
+    transport = httpx.ASGITransport(app=app)
+    messages = [
+        {"role": "user", "content": "I want to write about quantum computing"},
+        {"role": "assistant", "content": "What draws you to this topic?"},
+        {"role": "user", "content": "The security implications for encryption"},
+    ]
+
+    with patch("backend.interview.suggest_title", new_callable=AsyncMock) as mock:
+        mock.return_value = "Quantum Computing and Encryption"
+
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+            response = await client.post("/interview/suggest-title", json={"messages": messages})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["title"] == "Quantum Computing and Encryption"

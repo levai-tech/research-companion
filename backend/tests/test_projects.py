@@ -113,3 +113,27 @@ async def test_get_projects_returns_created_project(app):
     assert "theme" not in projects[0]
     assert "angle" not in projects[0]
     assert "layout_id" not in projects[0]
+
+
+# ── Behavior 5: PATCH /projects/{id} — update title ──────────────────────────
+
+async def test_patch_project_updates_title(app):
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        create_resp = await client.post("/projects", json=_CREATE_BODY)
+        project_id = create_resp.json()["id"]
+
+        patch_resp = await client.patch(f"/projects/{project_id}", json={"title": "Renamed Title"})
+
+    assert patch_resp.status_code == 200
+    body = patch_resp.json()
+    assert body["id"] == project_id
+    assert body["title"] == "Renamed Title"
+
+
+async def test_patch_project_returns_404_for_missing_project(app):
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.patch("/projects/nonexistent-id", json={"title": "New Title"})
+
+    assert response.status_code == 404

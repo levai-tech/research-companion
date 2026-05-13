@@ -95,6 +95,13 @@ def create_app(settings_path: Path | None = None, projects_dir: Path | None = No
         )
         return project.to_dict()
 
+    @app.patch("/projects/{project_id}")
+    async def patch_project(project_id: str, body: dict):
+        project = project_service.update_title(project_id, body["title"])
+        if project is None:
+            raise HTTPException(status_code=404, detail="Project not found")
+        return project.to_dict()
+
     @app.delete("/projects/{project_id}", status_code=204)
     async def delete_project(project_id: str):
         if not project_service.delete(project_id):
@@ -315,6 +322,17 @@ def create_app(settings_path: Path | None = None, projects_dir: Path | None = No
         if isinstance(result, dict) and result.get("phase") == "ready":
             return result
         return {"phase": "chat", "message": result}
+
+    @app.post("/interview/suggest-title")
+    async def post_interview_suggest_title(body: dict):
+        messages = body.get("messages", [])
+        try:
+            title = await interview.suggest_title(messages)
+        except httpx.HTTPStatusError as e:
+            raise _llm_error(e)
+        except RuntimeError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        return {"title": title}
 
     return app
 

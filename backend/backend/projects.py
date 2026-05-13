@@ -117,6 +117,10 @@ SELECT id, title, topic, document_type, last_modified
 FROM project_meta LIMIT 1
 """
 
+_UPDATE_TITLE = """
+UPDATE project_meta SET title = ?, last_modified = ? WHERE id = ?
+"""
+
 
 @dataclass
 class OutlineSection:
@@ -219,6 +223,18 @@ class ProjectService:
         if not db_path.exists():
             return None
         con = sqlite3.connect(db_path)
+        row = con.execute(_SELECT_ONE).fetchone()
+        con.close()
+        return Project(*row) if row else None
+
+    def update_title(self, project_id: str, title: str) -> Project | None:
+        db_path = self._projects_dir / project_id / "db.sqlite"
+        if not db_path.exists():
+            return None
+        last_modified = datetime.now(timezone.utc).isoformat()
+        con = sqlite3.connect(db_path)
+        con.execute(_UPDATE_TITLE, (title, last_modified, project_id))
+        con.commit()
         row = con.execute(_SELECT_ONE).fetchone()
         con.close()
         return Project(*row) if row else None

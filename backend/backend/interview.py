@@ -134,6 +134,45 @@ def _try_extract_ready_payload(content: str) -> dict[str, Any] | None:
     return None
 
 
+_TITLE_PROMPT = """You are naming a writing project. Read the interview transcript and produce a short, specific project title (4–8 words) that captures what the writer is actually working on — using their framing, not yours.
+
+Output only the title. No quotes, no punctuation at the end, no explanation."""
+
+
+async def suggest_title(messages: list[dict]) -> str:
+    """Return a short project title derived from the interview transcript."""
+    settings = Settings()
+    api_key = settings.get_key("openrouter_api_key")
+    if not api_key:
+        raise RuntimeError("OpenRouter API key not configured — add it in Settings.")
+
+    s = settings.get()
+    router = ModelRouter()
+    router.load_settings(s)
+    model = router.route("project_advisor")
+
+    conversation = "\n".join(
+        f"{m['role'].upper()}: {m['content']}" for m in messages
+    )
+
+    async with httpx.AsyncClient() as client:
+        response = await client.post(
+            _OPENROUTER_URL,
+            headers={"Authorization": f"Bearer {api_key}"},
+            json={
+                "model": model,
+                "messages": [
+                    {"role": "system", "content": _TITLE_PROMPT},
+                    {"role": "user", "content": conversation},
+                ],
+            },
+            timeout=60.0,
+        )
+        response.raise_for_status()
+
+    return response.json()["choices"][0]["message"]["content"].strip()
+
+
 async def call_llm(messages: list[dict]) -> str | dict[str, Any]:
     """Call the Project Advisor LLM via OpenRouter. System boundary — mock in tests."""
     settings = Settings()
