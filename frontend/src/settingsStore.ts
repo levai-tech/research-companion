@@ -11,6 +11,7 @@ export interface OllamaConfig {
 }
 
 export interface AppSettings {
+  display_name?: string;
   roles: Record<string, RoleConfig>;
   search_provider: string;
   ollama: OllamaConfig;

@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Settings, BookOpen, Search, FilePlus } from "lucide-react";
 import type { Project } from "../hooks/useProjects";
+import { useSettingsStore } from "../settingsStore";
 
 export type AppView = "home" | "workspace" | "resources" | "settings" | "account";
 
@@ -27,6 +28,7 @@ export default function Sidebar({
   onSelectProject,
   onDeleteProject,
 }: Props) {
+  const displayName = useSettingsStore((s) => s.settings?.display_name ?? "You");
   const [contextMenu, setContextMenu] = useState<ContextMenu | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [footerOpen, setFooterOpen] = useState(false);
@@ -144,10 +146,10 @@ export default function Sidebar({
             className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-semibold text-white flex-shrink-0"
             style={{ background: "linear-gradient(135deg, #22d3ee, #1e3a5f)" }}
           >
-            JD
+            {displayName.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase() || "?"}
           </span>
           <div className="flex flex-col min-w-0 leading-tight">
-            <span className="text-xs font-semibold truncate">Jake</span>
+            <span className="text-xs font-semibold truncate">{displayName}</span>
             <span className="text-[11px] text-muted-foreground">Free · Bring your own key</span>
           </div>
         </footer>

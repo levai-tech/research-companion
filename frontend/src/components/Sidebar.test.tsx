@@ -2,6 +2,7 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import Sidebar from "./Sidebar";
 import type { Project } from "../hooks/useProjects";
+import { useSettingsStore } from "../settingsStore";
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
 
@@ -157,9 +158,30 @@ describe("Sidebar — footer", () => {
     renderSidebar();
     const footer = screen.getByRole("contentinfo");
     expect(footer).toBeInTheDocument();
-    // Avatar initials and name are present
     const avatarEl = footer.querySelector("[aria-label='avatar']");
     expect(avatarEl).toBeTruthy();
     expect(avatarEl!.textContent).toMatch(/[A-Z]{1,3}/);
+  });
+
+  it("shows display_name from settings store in the footer", () => {
+    useSettingsStore.setState({
+      settings: {
+        display_name: "Alice Writer",
+        roles: {},
+        search_provider: "tavily",
+        ollama: { endpoint: "http://localhost:11434", embedding_model: "nomic-embed-text" },
+      },
+      keysMask: {},
+    });
+    renderSidebar();
+    expect(screen.getByRole("contentinfo")).toHaveTextContent("Alice Writer");
+  });
+
+  it("falls back to a default when display_name is not set", () => {
+    useSettingsStore.setState({ settings: null, keysMask: {} });
+    renderSidebar();
+    const footer = screen.getByRole("contentinfo");
+    // Should show something (not crash or be empty)
+    expect(footer.textContent).toBeTruthy();
   });
 });

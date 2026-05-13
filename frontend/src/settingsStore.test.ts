@@ -10,6 +10,7 @@ beforeEach(() => {
 });
 
 const mockSettings = {
+  display_name: "Jake",
   roles: {
     approach_explorer: { model: "mistralai/mistral-7b-instruct:free" },
     research_agent: { model: "mistralai/mistral-7b-instruct:free" },
@@ -33,6 +34,7 @@ describe("useSettingsStore", () => {
 
     expect(global.fetch).toHaveBeenCalledWith("http://127.0.0.1:8099/settings");
     expect(result.current.settings?.search_provider).toBe("tavily");
+    expect(result.current.settings?.display_name).toBe("Jake");
     expect(result.current.settings?.roles.approach_explorer.model).toBe("mistralai/mistral-7b-instruct:free");
   });
 

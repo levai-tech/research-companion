@@ -13,6 +13,16 @@ const ROLES: { key: string; label: string }[] = [
   { key: "semantic_ingester", label: "Semantic Ingester" },
 ];
 
+const CATALOGUE_DEFAULTS: Record<string, string> = {
+  project_advisor: "mistralai/mistral-7b-instruct:free",
+  approach_explorer: "mistralai/mistral-7b-instruct:free",
+  research_agent: "mistralai/mistral-7b-instruct:free",
+  literature_review: "mistralai/mistral-7b-instruct:free",
+  editor_ai: "mistralai/mistral-7b-instruct:free",
+  outline_generator: "mistralai/mistral-7b-instruct:free",
+  semantic_ingester: "qwen/qwen3-next-80b-a3b-instruct:free",
+};
+
 const SEARCH_PROVIDERS = ["tavily", "brave"];
 
 export default function SettingsPage() {
@@ -73,6 +83,16 @@ export default function SettingsPage() {
     <div className="max-w-2xl mx-auto p-8 space-y-10">
       <h1 className="text-2xl font-semibold">Settings</h1>
 
+      {/* Display Name */}
+      <section className="space-y-4">
+        <h2 className="text-base font-medium border-b pb-2">Display Name</h2>
+        <EditableField
+          label="Display Name"
+          value={settings.display_name ?? ""}
+          onSave={(v) => updateSettings({ display_name: v })}
+        />
+      </section>
+
       {/* API Keys */}
       <section className="space-y-4">
         <h2 className="text-base font-medium border-b pb-2">API Keys</h2>
@@ -102,8 +122,9 @@ export default function SettingsPage() {
       <section className="space-y-4">
         <h2 className="text-base font-medium border-b pb-2">Model Router</h2>
         <p className="text-sm text-muted-foreground">
-          Paste any OpenRouter model ID (e.g. <code className="font-mono text-xs">anthropic/claude-sonnet-4.6</code>).
-          Find available models at <span className="font-mono text-xs">openrouter.ai/models</span>.
+          Paste any OpenRouter model ID. Find available models at{" "}
+          <span className="font-mono text-xs">openrouter.ai/models</span>.
+          Clearing a field reverts to the Catalogue default.
         </p>
 
         <div className="space-y-3">
@@ -114,6 +135,7 @@ export default function SettingsPage() {
                 key={key}
                 label={label}
                 value={model}
+                placeholder={CATALOGUE_DEFAULTS[key]}
                 onSave={(v) => updateRoleModel(key, v)}
               />
             );
@@ -193,12 +215,14 @@ function KeyField({
 }
 
 function EditableField({
-  label, value, onSave,
+  label, value, placeholder, onSave,
 }: {
-  label: string; value: string; onSave: (v: string) => Promise<void>;
+  label: string; value: string; placeholder?: string; onSave: (v: string) => Promise<void>;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
+
+  const displayValue = value || placeholder || "";
 
   return (
     <div className="space-y-1">
@@ -220,7 +244,7 @@ function EditableField({
         ) : (
           <>
             <span className="flex-1 rounded-md border px-3 py-1.5 text-sm bg-muted/50 text-muted-foreground font-mono">
-              {value}
+              {displayValue}
             </span>
             <Button size="sm" variant="outline" onClick={() => { setDraft(value); setEditing(true); }}>
               Edit
