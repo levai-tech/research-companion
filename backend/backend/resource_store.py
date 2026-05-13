@@ -5,7 +5,7 @@ import shutil
 import sqlite3
 import uuid
 from contextlib import contextmanager
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Generator
@@ -30,6 +30,7 @@ class Resource:
     batches_total: int = 0
     batches_fallback: int = 0
     source_ref: str | None = None
+    project_ids: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -76,6 +77,14 @@ CREATE VIRTUAL TABLE IF NOT EXISTS embeddings USING vec0(
 _CREATE_SCHEMA_VERSION = """
 CREATE TABLE IF NOT EXISTS schema_version (
     version INTEGER PRIMARY KEY
+)
+"""
+
+_CREATE_RESOURCE_PROJECTS = """
+CREATE TABLE IF NOT EXISTS resource_projects (
+    resource_id TEXT NOT NULL REFERENCES resources(id) ON DELETE CASCADE,
+    project_id  TEXT NOT NULL,
+    PRIMARY KEY (resource_id, project_id)
 )
 """
 
@@ -126,6 +135,7 @@ class ResourceStore:
             con.execute(_CREATE_RESOURCES)
             con.execute(_CREATE_CHUNKS)
             con.execute(_CREATE_EMBEDDINGS)
+            con.execute(_CREATE_RESOURCE_PROJECTS)
 
     def _row_to_resource(self, row: tuple) -> Resource:
         return Resource(
@@ -353,11 +363,18 @@ class ResourceStore:
                 "SELECT id, content_hash, resource_type, indexing_status, citation_metadata, created_at"
                 " FROM resources ORDER BY created_at DESC"
             ).fetchall()
+            link_rows = con.execute(
+                "SELECT resource_id, project_id FROM resource_projects"
+            ).fetchall()
+        project_ids_by_resource: dict[str, list[str]] = {}
+        for resource_id, project_id in link_rows:
+            project_ids_by_resource.setdefault(resource_id, []).append(project_id)
         return [
             Resource(
                 id=r[0], content_hash=r[1], resource_type=r[2],
                 indexing_status=r[3], citation_metadata=json.loads(r[4]),
                 created_at=r[5],
+                project_ids=project_ids_by_resource.get(r[0], []),
             )
             for r in rows
         ]
@@ -400,6 +417,50 @@ class ResourceStore:
                 })
 
         return results
+
+    def attach_to_project(self, resource_id: str, project_id: str) -> None:
+        with self._db() as con:
+            con.execute(
+                "INSERT OR IGNORE INTO resource_projects (resource_id, project_id) VALUES (?, ?)",
+                (resource_id, project_id),
+            )
+
+    def detach_from_project(self, resource_id: str, project_id: str) -> bool:
+        with self._db() as con:
+            cur = con.execute(
+                "DELETE FROM resource_projects WHERE resource_id = ? AND project_id = ?",
+                (resource_id, project_id),
+            )
+            return cur.rowcount > 0
+
+    def list_for_project(self, project_id: str) -> list["Resource"]:
+        with self._db() as con:
+            rows = con.execute(
+                "SELECT r.id, r.content_hash, r.resource_type, r.indexing_status,"
+                " r.citation_metadata, r.created_at"
+                " FROM resources r"
+                " JOIN resource_projects rp ON rp.resource_id = r.id"
+                " WHERE rp.project_id = ?"
+                " ORDER BY r.created_at DESC",
+                (project_id,),
+            ).fetchall()
+            project_ids_rows = con.execute(
+                "SELECT resource_id, project_id FROM resource_projects WHERE resource_id IN"
+                f" (SELECT resource_id FROM resource_projects WHERE project_id = ?)",
+                (project_id,),
+            ).fetchall()
+        project_ids_by_resource: dict[str, list[str]] = {}
+        for rid, pid in project_ids_rows:
+            project_ids_by_resource.setdefault(rid, []).append(pid)
+        return [
+            Resource(
+                id=r[0], content_hash=r[1], resource_type=r[2],
+                indexing_status=r[3], citation_metadata=json.loads(r[4]),
+                created_at=r[5],
+                project_ids=project_ids_by_resource.get(r[0], []),
+            )
+            for r in rows
+        ]
 
     def delete(self, resource_id: str) -> None:
         with self._db() as con:

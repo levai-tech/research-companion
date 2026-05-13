@@ -272,6 +272,30 @@ def create_app(settings_path: Path | None = None, projects_dir: Path | None = No
         results = resource_store.search(query_embedding, top_k)
         return {"results": results}
 
+    @app.post("/resources/{resource_id}/projects/{project_id}")
+    async def attach_resource_to_project(resource_id: str, project_id: str):
+        if resource_store.get(resource_id) is None:
+            raise HTTPException(status_code=404, detail="Resource not found")
+        if project_service.get(project_id) is None:
+            raise HTTPException(status_code=404, detail="Project not found")
+        resource_store.attach_to_project(resource_id, project_id)
+        return {"ok": True}
+
+    @app.delete("/resources/{resource_id}/projects/{project_id}", status_code=204)
+    async def detach_resource_from_project(resource_id: str, project_id: str):
+        if resource_store.get(resource_id) is None:
+            raise HTTPException(status_code=404, detail="Resource not found")
+        if not resource_store.detach_from_project(resource_id, project_id):
+            raise HTTPException(status_code=404, detail="Resource not attached to project")
+        return Response(status_code=204)
+
+    @app.get("/projects/{project_id}/resources")
+    async def get_project_resources(project_id: str):
+        if project_service.get(project_id) is None:
+            raise HTTPException(status_code=404, detail="Project not found")
+        resources = resource_store.list_for_project(project_id)
+        return {"count": len(resources), "resources": [r.to_dict() for r in resources]}
+
     @app.delete("/resources/{resource_id}")
     async def delete_resource(resource_id: str):
         if resource_store.get(resource_id) is None:
