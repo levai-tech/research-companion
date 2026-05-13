@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useAppStore } from "../store";
 import { useProjects } from "../hooks/useProjects";
+import { useJobTrayStore } from "../jobTrayStore";
 import StatusPill from "./StatusPill";
 import AddResourceModal from "./AddResourceModal";
 
@@ -20,6 +21,7 @@ interface Props {
 export default function ResourcesPage({ initialFilterId }: Props) {
   const port = useAppStore((s) => s.backendPort);
   const { projects } = useProjects();
+  const registerJob = useJobTrayStore((s) => s.registerJob);
   const [resources, setResources] = useState<Resource[]>([]);
   const [filterId, setFilterId] = useState<string>(initialFilterId ?? "all");
   const [modalOpen, setModalOpen] = useState(false);
@@ -63,6 +65,13 @@ export default function ResourcesPage({ initialFilterId }: Props) {
 
   function handleResourceAdded(resource: Resource) {
     setResources((prev) => [...prev, resource]);
+    if (resource.indexing_status !== "ready") {
+      registerJob(
+        resource.project_ids[0] ?? "",
+        resource.id,
+        resource.citation_metadata?.title ?? "(untitled)",
+      );
+    }
     setModalOpen(false);
   }
 
