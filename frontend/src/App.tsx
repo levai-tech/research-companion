@@ -1,33 +1,75 @@
-import { useState } from "react";
-import { Settings } from "lucide-react";
-import HomeScreen from "./components/HomeScreen";
-import SettingsPage from "./components/SettingsPage";
+import { useEffect, useCallback } from "react";
 import { useBackendPort } from "./hooks/useBackendPort";
+import { useProjects } from "./hooks/useProjects";
+import { useAppStore } from "./store";
+import Sidebar, { type AppView } from "./components/Sidebar";
+import HomeScreen from "./components/HomeScreen";
+import ProjectWorkspace from "./components/ProjectWorkspace";
+import ResourcesTab from "./components/ResourcesTab";
+import SettingsPage from "./components/SettingsPage";
+import JobTray from "./components/JobTray";
+import { useViewStore } from "./viewStore";
 
 export default function App() {
   useBackendPort();
-  const [showSettings, setShowSettings] = useState(false);
+  const port = useAppStore((s) => s.backendPort);
+  const { view, activeProjectId, navigate, selectProject } = useViewStore();
+  const { projects, refetch } = useProjects();
+
+  const handleKeyDown = useCallback(
+    (e: KeyboardEvent) => {
+      if (e.key === "n" && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        navigate("home", null);
+      }
+    },
+    [navigate],
+  );
+
+  useEffect(() => {
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [handleKeyDown]);
+
+  function handleDeleteProject(projectId: string) {
+    if (!port) return;
+    fetch(`http://127.0.0.1:${port}/projects/${projectId}`, { method: "DELETE" }).then(
+      () => refetch(),
+    );
+    if (activeProjectId === projectId) {
+      navigate("home", null);
+    }
+  }
+
+  const activeProject = projects.find((p) => p.id === activeProjectId) ?? null;
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden">
-      <header className="flex items-center justify-between border-b px-6 py-3">
-        <span className="font-semibold text-sm">Research Companion</span>
-        <button
-          aria-label="Settings"
-          onClick={() => setShowSettings((s) => !s)}
-          className="rounded-md p-1.5 hover:bg-muted transition-colors"
-        >
-          <Settings className="h-5 w-5" />
-        </button>
-      </header>
+    <div className="h-screen flex flex-row overflow-hidden">
+      <Sidebar
+        view={view}
+        activeProjectId={activeProjectId}
+        projects={projects}
+        onNavigate={(v: AppView) => navigate(v, v === "home" ? null : activeProjectId)}
+        onSelectProject={(id) => selectProject(id)}
+        onDeleteProject={handleDeleteProject}
+      />
 
-      <main className="flex-1 min-h-0 overflow-y-auto">
-        {showSettings ? (
-          <SettingsPage onClose={() => setShowSettings(false)} />
-        ) : (
-          <HomeScreen />
-        )}
-      </main>
+      <div className="flex-1 flex flex-col min-h-0">
+        <main className="flex-1 min-h-0 overflow-y-auto">
+          {view === "home" && <HomeScreen onProjectCreated={refetch} />}
+          {view === "workspace" && activeProject && (
+            <ProjectWorkspace project={activeProject} />
+          )}
+          {view === "resources" && <ResourcesTab projectId={activeProjectId ?? ""} />}
+          {view === "settings" && <SettingsPage />}
+          {view === "account" && (
+            <div className="p-8">
+              <h1 className="text-2xl font-semibold">Account</h1>
+            </div>
+          )}
+        </main>
+        <JobTray projectId={activeProjectId ?? ""} />
+      </div>
     </div>
   );
 }

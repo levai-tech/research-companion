@@ -5,7 +5,6 @@ import ApproachExplorer from "./ApproachExplorer";
 import OutlineGenerator from "./OutlineGenerator";
 import BlockEditor from "./BlockEditor";
 import ResourcesTab from "./ResourcesTab";
-import JobTray from "./JobTray";
 import { outlineToDoc } from "../utils/outlineToDoc";
 
 interface Approach {
@@ -38,10 +37,9 @@ type Tab = "transcript" | "approach" | "outline" | "editor" | "resources";
 
 interface Props {
   project: Project;
-  onBack: () => void;
 }
 
-export default function ProjectWorkspace({ project, onBack }: Props) {
+export default function ProjectWorkspace({ project }: Props) {
   const port = useAppStore((s) => s.backendPort);
   const [approach, setApproach] = useState<Approach | null>(null);
   const [transcript, setTranscript] = useState<Transcript | null>(null);
@@ -94,12 +92,6 @@ export default function ProjectWorkspace({ project, onBack }: Props) {
     <div className="flex flex-col h-full">
       {/* Header */}
       <div className="flex items-center gap-3 border-b px-6 py-3">
-        <button
-          className="text-sm text-muted-foreground hover:text-foreground"
-          onClick={onBack}
-        >
-          ← Back
-        </button>
         <div className="flex-1">
           <h1 className="font-semibold">{project.title}</h1>
           <p className="text-xs text-muted-foreground capitalize">{project.document_type} · {project.topic}</p>
@@ -217,7 +209,6 @@ export default function ProjectWorkspace({ project, onBack }: Props) {
         )}
       </div>
 
-      <JobTray projectId={project.id} />
     </div>
   );
 }

@@ -3,7 +3,6 @@ import { Trash2 } from "lucide-react";
 import { useProjects, type Project } from "../hooks/useProjects";
 import { useAppStore } from "../store";
 import Interview from "./Interview";
-import ProjectWorkspace from "./ProjectWorkspace";
 
 function ProjectCard({ project, onClick, onDelete }: { project: Project; onClick: () => void; onDelete: () => void }) {
   return (
@@ -26,22 +25,19 @@ function ProjectCard({ project, onClick, onDelete }: { project: Project; onClick
   );
 }
 
-type View = "home" | "new-project" | "workspace";
+interface Props {
+  onProjectCreated?: () => void;
+}
 
-export default function HomeScreen() {
+export default function HomeScreen({ onProjectCreated }: Props) {
   const { projects, isLoading, refetch } = useProjects();
   const port = useAppStore((s) => s.backendPort);
-  const [view, setView] = useState<View>("home");
-  const [activeProject, setActiveProject] = useState<Project | null>(null);
+  const [showNewProject, setShowNewProject] = useState(false);
 
   function handleProjectCreated() {
     refetch();
-    setView("home");
-  }
-
-  function openProject(project: Project) {
-    setActiveProject(project);
-    setView("workspace");
+    onProjectCreated?.();
+    setShowNewProject(false);
   }
 
   function deleteProject(projectId: string) {
@@ -50,13 +46,13 @@ export default function HomeScreen() {
       .then(() => refetch());
   }
 
-  if (view === "new-project") {
+  if (showNewProject) {
     return (
       <div className="flex flex-col h-full">
         <div className="flex items-center gap-3 border-b px-6 py-3">
           <button
             className="text-sm text-muted-foreground hover:text-foreground"
-            onClick={() => setView("home")}
+            onClick={() => setShowNewProject(false)}
           >
             ← Back
           </button>
@@ -69,10 +65,6 @@ export default function HomeScreen() {
     );
   }
 
-  if (view === "workspace" && activeProject) {
-    return <ProjectWorkspace project={activeProject} onBack={() => setView("home")} />;
-  }
-
   if (isLoading) return <div className="p-6">Loading…</div>;
 
   return (
@@ -81,7 +73,7 @@ export default function HomeScreen() {
         <h1 className="text-2xl font-bold">Projects</h1>
         <button
           className="rounded bg-primary px-4 py-2 text-primary-foreground"
-          onClick={() => setView("new-project")}
+          onClick={() => setShowNewProject(true)}
         >
           New Project
         </button>
@@ -92,7 +84,7 @@ export default function HomeScreen() {
       ) : (
         <div className="grid gap-4">
           {projects.map((p) => (
-            <ProjectCard key={p.id} project={p} onClick={() => openProject(p)} onDelete={() => deleteProject(p.id)} />
+            <ProjectCard key={p.id} project={p} onClick={() => {}} onDelete={() => deleteProject(p.id)} />
           ))}
         </div>
       )}

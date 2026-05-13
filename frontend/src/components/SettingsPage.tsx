@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { ArrowLeft } from "lucide-react";
 import { useSettingsStore } from "../settingsStore";
 import { useAppStore } from "../store";
 import { Button } from "@/components/ui/button";
@@ -16,7 +15,7 @@ const ROLES: { key: string; label: string }[] = [
 
 const SEARCH_PROVIDERS = ["tavily", "brave"];
 
-export default function SettingsPage({ onClose }: { onClose: () => void }) {
+export default function SettingsPage() {
   const { settings, keysMask, loadSettings, loadKeysMask, updateRoleModel, updateSettings, saveApiKey } =
     useSettingsStore();
   const backendPort = useAppStore((s) => s.backendPort);
@@ -72,16 +71,7 @@ export default function SettingsPage({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="max-w-2xl mx-auto p-8 space-y-10">
-      <div className="flex items-center gap-3">
-        <button
-          onClick={onClose}
-          aria-label="Back to home"
-          className="rounded-md p-1 hover:bg-muted transition-colors"
-        >
-          <ArrowLeft className="h-5 w-5" />
-        </button>
-        <h1 className="text-2xl font-semibold">Settings</h1>
-      </div>
+      <h1 className="text-2xl font-semibold">Settings</h1>
 
       {/* API Keys */}
       <section className="space-y-4">
