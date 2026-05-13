@@ -118,17 +118,32 @@ function Field({
   );
 }
 
+function stemOf(filename: string): string {
+  return filename.replace(/\.[^.]+$/, "");
+}
+
 export default function AddResourceModal({ projectId, onClose, onResourceAdded }: Props) {
   const port = useAppStore((s) => s.backendPort);
   const [mode, setMode] = useState<InputMode>("file");
   const [fileResourceType, setFileResourceType] = useState<ResourceType>("Book");
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
+  const [fileTitles, setFileTitles] = useState<string[]>([]);
   const [url, setUrl] = useState("");
   const [meta, setMetaState] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
 
   function setMeta(k: string, v: string) {
     setMetaState((prev) => ({ ...prev, [k]: v }));
+  }
+
+  function handleFilesChange(picked: FileList | null) {
+    const arr = picked ? Array.from(picked) : [];
+    setFiles(arr);
+    setFileTitles(arr.map((f) => stemOf(f.name)));
+  }
+
+  function setFileTitle(index: number, title: string) {
+    setFileTitles((prev) => prev.map((t, i) => (i === index ? title : t)));
   }
 
   async function handleSubmit() {
@@ -138,15 +153,17 @@ export default function AddResourceModal({ projectId, onClose, onResourceAdded }
       let response: Response;
       if (mode === "file") {
         const form = new FormData();
-        if (file) form.append("file", file);
+        files.forEach((f) => form.append("files", f));
+        form.append("resource_type", fileResourceType);
         const cleanMeta = Object.fromEntries(
           Object.entries(meta).filter(([, v]) => v !== ""),
         );
         if (Object.keys(cleanMeta).length > 0) {
           form.append("citation_metadata", JSON.stringify(cleanMeta));
         }
+        if (projectId) form.append("project_id", projectId);
         response = await fetch(
-          `http://127.0.0.1:${port}/resources/file?resource_type=${encodeURIComponent(fileResourceType)}`,
+          `http://127.0.0.1:${port}/resources/file`,
           { method: "POST", body: form },
         );
       } else {
@@ -165,8 +182,12 @@ export default function AddResourceModal({ projectId, onClose, onResourceAdded }
       if (!response.ok) {
         throw new Error(`Server error ${response.status}`);
       }
-      const resource = await response.json();
-      onResourceAdded(resource);
+      const data = await response.json();
+      if (Array.isArray(data)) {
+        data.forEach((r) => onResourceAdded(r));
+      } else {
+        onResourceAdded(data);
+      }
     } finally {
       setSubmitting(false);
     }
@@ -211,16 +232,36 @@ export default function AddResourceModal({ projectId, onClose, onResourceAdded }
         {mode === "file" && (
           <>
             <div className="flex flex-col gap-1">
-              <label htmlFor="file-input" className="text-sm font-medium">File</label>
+              <label htmlFor="file-input" className="text-sm font-medium">Files</label>
               <input
                 id="file-input"
                 data-testid="file-input"
                 type="file"
                 accept=".pdf,.docx,.txt"
-                onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+                multiple
+                onChange={(e) => handleFilesChange(e.target.files)}
                 aria-label="File"
               />
             </div>
+
+            {/* Per-file title rows */}
+            {files.length > 0 && (
+              <div className="flex flex-col gap-2">
+                {files.map((f, i) => (
+                  <div key={i} data-testid="file-row" className="flex items-center gap-2">
+                    <span className="text-sm text-muted-foreground truncate max-w-[120px]">{f.name}</span>
+                    <input
+                      type="text"
+                      data-testid="file-title-input"
+                      aria-label={`Title for ${f.name}`}
+                      value={fileTitles[i] ?? ""}
+                      onChange={(e) => setFileTitle(i, e.target.value)}
+                      className="flex-1 rounded border px-2 py-1 text-sm"
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
 
             {/* Resource type segmented control */}
             <div className="flex gap-2" role="radiogroup" aria-label="Resource type">

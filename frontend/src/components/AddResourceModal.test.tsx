@@ -184,6 +184,40 @@ it("submitting a URL calls POST /resources/url and fires onResourceAdded with qu
   ));
 });
 
+// ── Behavior 7: file picker accepts multiple files; each file gets a row ─────
+
+it("file picker accepts multiple files and renders one title row per file", async () => {
+  renderModal();
+
+  const fileInput = screen.getByTestId("file-input") as HTMLInputElement;
+  const files = [
+    new File(["a"], "alpha.txt", { type: "text/plain" }),
+    new File(["b"], "beta.txt", { type: "text/plain" }),
+  ];
+  await userEvent.upload(fileInput, files);
+
+  const rows = screen.getAllByTestId("file-row");
+  expect(rows).toHaveLength(2);
+});
+
+// ── Behavior 8: each file row shows editable title defaulting to filename stem ─
+
+it("each file row has an editable title input defaulting to the filename stem", async () => {
+  renderModal();
+
+  const fileInput = screen.getByTestId("file-input") as HTMLInputElement;
+  const files = [
+    new File(["x"], "paper.pdf", { type: "application/pdf" }),
+    new File(["y"], "notes.txt", { type: "text/plain" }),
+  ];
+  await userEvent.upload(fileInput, files);
+
+  const titleInputs = screen.getAllByTestId("file-title-input");
+  expect(titleInputs).toHaveLength(2);
+  expect(titleInputs[0]).toHaveValue("paper");
+  expect(titleInputs[1]).toHaveValue("notes");
+});
+
 // ── Behavior 6: close button fires onClose ────────────────────────────────────
 
 it("clicking the close button fires onClose", async () => {

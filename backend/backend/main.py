@@ -1,4 +1,5 @@
 import argparse
+import hashlib
 import json
 import socket
 from contextlib import asynccontextmanager
@@ -19,6 +20,19 @@ from backend.settings import Settings
 
 _DEFAULT_BASE_DIR = Path.home() / ".research-companion"
 MAX_UPLOAD_BYTES = 200 * 1024 * 1024  # 200 MB
+
+
+def _apply_title_collision_suffixes(stems: list[str], contents: list[bytes]) -> list[str]:
+    seen: dict[str, int] = {}
+    titles = []
+    for stem, content in zip(stems, contents):
+        if stem in seen:
+            suffix = hashlib.sha256(content).hexdigest()[:6]
+            titles.append(f"{stem} ({suffix})")
+        else:
+            seen[stem] = 1
+            titles.append(stem)
+    return titles
 
 
 def find_free_port() -> int:
@@ -207,29 +221,48 @@ def create_app(settings_path: Path | None = None, projects_dir: Path | None = No
     async def post_resource_file(
         resource_type: str = "Book",
         citation_metadata: str = Form(default="{}"),
-        file: UploadFile = File(...),
+        files: list[UploadFile] = File(...),
+        project_id: str = Form(default=""),
     ):
         try:
-            meta = json.loads(citation_metadata) if citation_metadata else {}
+            shared_meta = json.loads(citation_metadata) if citation_metadata else {}
         except json.JSONDecodeError:
-            meta = {}
-        content = await file.read()
-        if len(content) > MAX_UPLOAD_BYTES:
-            raise HTTPException(status_code=413, detail="File exceeds 200 MB limit")
-        result = ingestion_service.accept_file(
-            content=content,
-            resource_type=resource_type,
-            citation_metadata=meta or None,
-        )
-        if result["indexing_status"] == "queued":
-            si_cfg = settings.get().get("roles", {}).get("semantic_ingester", {})
-            si_model = si_cfg.get("model")
-            si_key = settings.get_key("openrouter_api_key") if si_model else None
-            filename = file.filename or "upload"
-            resource_store.set_source_ref(result["resource_id"], filename)
-            runner.enqueue_file(result["resource_id"], filename, si_model, si_key)
-        resource = resource_store.get(result["resource_id"])
-        return resource.to_dict() if resource else result
+            shared_meta = {}
+
+        contents = []
+        for f in files:
+            content = await f.read()
+            if len(content) > MAX_UPLOAD_BYTES:
+                raise HTTPException(status_code=413, detail="File exceeds 200 MB limit")
+            contents.append(content)
+
+        filenames = [f.filename or "upload" for f in files]
+        stems = [Path(name).stem for name in filenames]
+        titles = _apply_title_collision_suffixes(stems, contents)
+
+        si_cfg = settings.get().get("roles", {}).get("semantic_ingester", {})
+        si_model = si_cfg.get("model")
+        si_key = settings.get_key("openrouter_api_key") if si_model else None
+
+        results = []
+        for content, filename, title in zip(contents, filenames, titles):
+            file_meta = {**shared_meta, "title": title}
+            result = ingestion_service.accept_file(
+                content=content,
+                resource_type=resource_type,
+                citation_metadata=file_meta or None,
+            )
+            if result["indexing_status"] == "queued":
+                resource_store.set_source_ref(result["resource_id"], filename)
+                runner.enqueue_file(result["resource_id"], filename, si_model, si_key)
+            if project_id:
+                try:
+                    resource_store.attach_to_project(result["resource_id"], project_id)
+                except Exception:
+                    pass
+            resource = resource_store.get(result["resource_id"])
+            results.append(resource.to_dict() if resource else result)
+        return results
 
     @app.post("/resources/url", status_code=202)
     async def post_resource_url(body: dict):

@@ -48,7 +48,7 @@ async def test_file_upload_returns_202_without_project_id(tmp_app):
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
         response = await client.post(
             "/resources/file",
-            files={"file": ("book.txt", b"sample content", "text/plain")},
+            files=[("files", ("book.txt", b"sample content", "text/plain"))],
             data={"resource_type": "Book"},
         )
 
@@ -60,7 +60,7 @@ async def test_file_upload_resource_appears_in_list(tmp_app):
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
         await client.post(
             "/resources/file",
-            files={"file": ("book.txt", b"sample content", "text/plain")},
+            files=[("files", ("book.txt", b"sample content", "text/plain"))],
             data={"resource_type": "Book"},
         )
         list_resp = await client.get("/resources")
@@ -77,7 +77,7 @@ async def test_file_upload_exceeding_size_limit_returns_413(tmp_app):
         async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
             response = await client.post(
                 "/resources/file",
-                files={"file": ("large.txt", b"x" * 1025, "text/plain")},
+                files=[("files", ("large.txt", b"x" * 1025, "text/plain"))],
                 data={"resource_type": "Book"},
             )
         assert response.status_code == 413
@@ -305,6 +305,67 @@ async def test_detach_when_not_attached_returns_404(tmp_app, store):
         response = await client.delete(f"/resources/{resource.id}/projects/{project_id}")
 
     assert response.status_code == 404
+
+
+# ── Behavior 8: POST /resources/file batch upload ────────────────────────────
+
+async def test_batch_upload_two_files_returns_list_of_two_resources(tmp_app):
+    transport = httpx.ASGITransport(app=tmp_app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post(
+            "/resources/file",
+            files=[
+                ("files", ("alpha.txt", b"content alpha", "text/plain")),
+                ("files", ("beta.txt", b"content beta", "text/plain")),
+            ],
+            data={"resource_type": "Book"},
+        )
+
+    assert response.status_code == 202
+    body = response.json()
+    assert isinstance(body, list)
+    assert len(body) == 2
+
+
+async def test_batch_upload_title_collision_suffix_applied_to_duplicate(tmp_app):
+    transport = httpx.ASGITransport(app=tmp_app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post(
+            "/resources/file",
+            files=[
+                ("files", ("notes.txt", b"first notes content", "text/plain")),
+                ("files", ("notes.txt", b"second notes content", "text/plain")),
+            ],
+            data={"resource_type": "Book"},
+        )
+
+    assert response.status_code == 202
+    items = response.json()
+    first_title = items[0]["citation_metadata"].get("title", "")
+    second_title = items[1]["citation_metadata"].get("title", "")
+    assert first_title == "notes"
+    import re
+    assert re.fullmatch(r"notes \([0-9a-f]{6}\)", second_title), (
+        f"Expected 'notes (xxxxxx)' but got {second_title!r}"
+    )
+
+
+async def test_batch_upload_with_project_id_attaches_each_resource(tmp_app):
+    transport = httpx.ASGITransport(app=tmp_app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        project_id = await _make_project(client)
+        response = await client.post(
+            "/resources/file",
+            files=[
+                ("files", ("doc1.txt", b"document one", "text/plain")),
+                ("files", ("doc2.txt", b"document two", "text/plain")),
+            ],
+            data={"resource_type": "Book", "project_id": project_id},
+        )
+
+    assert response.status_code == 202
+    items = response.json()
+    assert all(project_id in item["project_ids"] for item in items)
 
 
 async def test_project_ids_empty_after_detach(tmp_app, store):

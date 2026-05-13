@@ -156,7 +156,14 @@ class ResourceStore:
             f" FROM resources WHERE {where}",
             params,
         ).fetchone()
-        return self._row_to_resource(row) if row else None
+        if row is None:
+            return None
+        resource = self._row_to_resource(row)
+        pid_rows = con.execute(
+            "SELECT project_id FROM resource_projects WHERE resource_id = ?", (resource.id,)
+        ).fetchall()
+        resource.project_ids = [r[0] for r in pid_rows]
+        return resource
 
     def _reset_failed(self, resource_id: str, con: sqlite3.Connection) -> None:
         chunk_ids = [
