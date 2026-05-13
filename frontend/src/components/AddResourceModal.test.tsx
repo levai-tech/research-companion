@@ -140,7 +140,7 @@ it("submitting a file calls POST /resources/file and fires onResourceAdded with 
   await userEvent.click(screen.getByRole("button", { name: /add resource/i }));
 
   const call = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
-  expect(call[0]).toContain("/projects/proj-1/resources/file");
+  expect(call[0]).toContain("/resources/file");
   expect(call[1].method).toBe("POST");
 
   await vi.waitFor(() => expect(onResourceAdded).toHaveBeenCalledWith(
@@ -174,7 +174,7 @@ it("submitting a URL calls POST /resources/url and fires onResourceAdded with qu
   await userEvent.click(screen.getByRole("button", { name: /add resource/i }));
 
   const call = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
-  expect(call[0]).toContain("/projects/proj-1/resources/url");
+  expect(call[0]).toContain("/resources/url");
   expect(call[1].method).toBe("POST");
   const body = JSON.parse(call[1].body);
   expect(body.url).toBe("https://example.com");

@@ -57,21 +57,21 @@ export default function ResourcesTab({ projectId }: Props) {
     e.preventDefault();
     if (!port || !query.trim()) return;
     const params = new URLSearchParams({ q: query.trim(), top_k: "10" });
-    fetch(`http://127.0.0.1:${port}/projects/${projectId}/resources/search?${params}`)
+    fetch(`http://127.0.0.1:${port}/resources/search?${params}`)
       .then((r) => r.json())
       .then((data) => setSearchResults(data.results));
   }
 
   useEffect(() => {
     if (!port) return;
-    fetch(`http://127.0.0.1:${port}/projects/${projectId}/resources`)
+    fetch(`http://127.0.0.1:${port}/resources`)
       .then((r) => r.json())
       .then(setResources);
   }, [port, projectId]);
 
   function handleDelete(resourceId: string) {
     if (!port) return;
-    fetch(`http://127.0.0.1:${port}/projects/${projectId}/resources/${resourceId}`, {
+    fetch(`http://127.0.0.1:${port}/resources/${resourceId}`, {
       method: "DELETE",
     }).then(() => {
       setResources((prev) => prev.filter((r) => r.id !== resourceId));

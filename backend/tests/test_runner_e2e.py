@@ -44,7 +44,6 @@ async def test_e2e_txt_ingest_reaches_ready(tmp_path):
         resource = store.get_or_create(sha256, "Book")
         (tmp_path / "sources").mkdir(exist_ok=True)
         (tmp_path / "sources" / sha256).write_bytes(content)
-        store.attach("project-e2e", resource.id)
 
         runner.enqueue_file(resource.id, "fox.txt")
 
@@ -68,7 +67,6 @@ async def test_e2e_force_recursive_skips_semantic_ingester(tmp_path):
         resource = store.get_or_create(sha256, "Book")
         (tmp_path / "sources").mkdir(exist_ok=True)
         (tmp_path / "sources" / sha256).write_bytes(content)
-        store.attach("project-force-recursive", resource.id)
 
         runner.enqueue_file(
             resource.id, "fox.txt",
@@ -120,7 +118,6 @@ async def test_e2e_kill_and_respawn(tmp_path):
         sha256 = hashlib.sha256(content2).hexdigest()
         resource2 = store.get_or_create(sha256, "Book")
         (tmp_path / "sources" / sha256).write_bytes(content2)
-        store.attach("project-respawn", resource2.id)
 
         runner.enqueue_file(resource2.id, "respawn.txt")
 

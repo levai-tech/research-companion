@@ -146,7 +146,7 @@ export default function AddResourceModal({ projectId, onClose, onResourceAdded }
           form.append("citation_metadata", JSON.stringify(cleanMeta));
         }
         response = await fetch(
-          `http://127.0.0.1:${port}/projects/${projectId}/resources/file?resource_type=${encodeURIComponent(fileResourceType)}`,
+          `http://127.0.0.1:${port}/resources/file?resource_type=${encodeURIComponent(fileResourceType)}`,
           { method: "POST", body: form },
         );
       } else {
@@ -154,7 +154,7 @@ export default function AddResourceModal({ projectId, onClose, onResourceAdded }
           Object.entries(meta).filter(([, v]) => v !== ""),
         );
         response = await fetch(
-          `http://127.0.0.1:${port}/projects/${projectId}/resources/url`,
+          `http://127.0.0.1:${port}/resources/url`,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },

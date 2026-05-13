@@ -46,7 +46,6 @@ class IngestionService:
 
     def accept_file(
         self,
-        project_id: str,
         content: bytes,
         resource_type: str,
         citation_metadata: dict | None = None,
@@ -54,23 +53,19 @@ class IngestionService:
         sha256 = hashlib.sha256(content).hexdigest()
         resource = self._store.get_or_create(sha256, resource_type, citation_metadata)
 
-        # Save raw file for ingestion (idempotent)
         dest = self._store._sources_dir / sha256
         if not dest.exists():
             dest.write_bytes(content)
 
-        self._store.attach(project_id, resource.id)
         return {"resource_id": resource.id, "indexing_status": resource.indexing_status}
 
     def accept_url(
         self,
-        project_id: str,
         url: str,
         citation_metadata: dict | None = None,
     ) -> dict:
         key = _normalize_url(url)
         resource = self._store.get_or_create(key, "Webpage", citation_metadata)
-        self._store.attach(project_id, resource.id)
         return {"resource_id": resource.id, "indexing_status": resource.indexing_status}
 
     def get_status(self, resource_id: str) -> dict | None:

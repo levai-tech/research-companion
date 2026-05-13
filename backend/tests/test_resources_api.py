@@ -1,7 +1,6 @@
 import pytest
 import httpx
 from backend.main import create_app
-from backend.projects import ProjectService
 from backend.resource_store import ResourceStore
 
 
@@ -15,30 +14,23 @@ def store(tmp_path):
     return ResourceStore(base_dir=tmp_path)
 
 
-@pytest.fixture
-def project(tmp_path):
-    svc = ProjectService(base_dir=tmp_path)
-    return svc.create(title="Test Book", topic="Quantum", document_type="book")
+# ── Behavior 1: GET /resources ────────────────────────────────────────────────
 
-
-# ── Behavior 1: GET /projects/{id}/resources ─────────────────────────────────
-
-async def test_list_resources_returns_empty_for_new_project(tmp_app, project):
+async def test_list_resources_returns_empty_initially(tmp_app):
     transport = httpx.ASGITransport(app=tmp_app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
-        response = await client.get(f"/projects/{project.id}/resources")
+        response = await client.get("/resources")
 
     assert response.status_code == 200
     assert response.json() == []
 
 
-async def test_list_resources_returns_attached_resources(tmp_app, project, store):
+async def test_list_resources_returns_all_resources(tmp_app, store):
     resource = store.get_or_create("hash-1", "Book", {"title": "My Book"})
-    store.attach(project.id, resource.id)
 
     transport = httpx.ASGITransport(app=tmp_app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
-        response = await client.get(f"/projects/{project.id}/resources")
+        response = await client.get("/resources")
 
     assert response.status_code == 200
     items = response.json()
@@ -49,52 +41,105 @@ async def test_list_resources_returns_attached_resources(tmp_app, project, store
     assert items[0]["citation_metadata"]["title"] == "My Book"
 
 
-async def test_list_resources_returns_404_for_missing_project(tmp_app):
+# ── Behavior 2: POST /resources/file ─────────────────────────────────────────
+
+async def test_file_upload_returns_202_without_project_id(tmp_app):
     transport = httpx.ASGITransport(app=tmp_app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
-        response = await client.get("/projects/no-such-id/resources")
-
-    assert response.status_code == 404
-
-
-# ── Behavior 2: DELETE /projects/{id}/resources/{res_id} ─────────────────────
-
-async def test_delete_resource_removes_it_from_list(tmp_app, project, store):
-    resource = store.get_or_create("hash-2", "Book")
-    store.attach(project.id, resource.id)
-
-    transport = httpx.ASGITransport(app=tmp_app)
-    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
-        delete_resp = await client.delete(
-            f"/projects/{project.id}/resources/{resource.id}"
+        response = await client.post(
+            "/resources/file",
+            files={"file": ("book.txt", b"sample content", "text/plain")},
+            data={"resource_type": "Book"},
         )
-        list_resp = await client.get(f"/projects/{project.id}/resources")
+
+    assert response.status_code == 202
+
+
+async def test_file_upload_resource_appears_in_list(tmp_app):
+    transport = httpx.ASGITransport(app=tmp_app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        await client.post(
+            "/resources/file",
+            files={"file": ("book.txt", b"sample content", "text/plain")},
+            data={"resource_type": "Book"},
+        )
+        list_resp = await client.get("/resources")
+
+    assert len(list_resp.json()) == 1
+
+
+async def test_file_upload_exceeding_size_limit_returns_413(tmp_app):
+    import backend.main as main_mod
+    original = main_mod.MAX_UPLOAD_BYTES
+    main_mod.MAX_UPLOAD_BYTES = 1024
+    try:
+        transport = httpx.ASGITransport(app=tmp_app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+            response = await client.post(
+                "/resources/file",
+                files={"file": ("large.txt", b"x" * 1025, "text/plain")},
+                data={"resource_type": "Book"},
+            )
+        assert response.status_code == 413
+    finally:
+        main_mod.MAX_UPLOAD_BYTES = original
+
+
+# ── Behavior 3: POST /resources/url ──────────────────────────────────────────
+
+async def test_url_upload_returns_202_without_project_id(tmp_app):
+    transport = httpx.ASGITransport(app=tmp_app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post(
+            "/resources/url",
+            json={"url": "https://example.com/article"},
+        )
+
+    assert response.status_code == 202
+
+
+async def test_url_upload_resource_appears_in_list(tmp_app):
+    transport = httpx.ASGITransport(app=tmp_app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        await client.post(
+            "/resources/url",
+            json={"url": "https://example.com/article"},
+        )
+        list_resp = await client.get("/resources")
+
+    assert len(list_resp.json()) == 1
+
+
+# ── Behavior 4: DELETE /resources/{id} ───────────────────────────────────────
+
+async def test_delete_resource_removes_it(tmp_app, store):
+    resource = store.get_or_create("hash-del", "Book")
+
+    transport = httpx.ASGITransport(app=tmp_app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        delete_resp = await client.delete(f"/resources/{resource.id}")
+        list_resp = await client.get("/resources")
 
     assert delete_resp.status_code == 200
     assert list_resp.json() == []
 
 
-async def test_delete_nonexistent_resource_returns_404(tmp_app, project):
+async def test_delete_nonexistent_resource_returns_404(tmp_app):
     transport = httpx.ASGITransport(app=tmp_app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
-        response = await client.delete(
-            f"/projects/{project.id}/resources/no-such-id"
-        )
+        response = await client.delete("/resources/no-such-id")
 
     assert response.status_code == 404
 
 
-# ── Behavior 3: GET /projects/{id}/resources/{res_id}/status ─────────────────
+# ── Behavior 5: GET /resources/{id}/status ───────────────────────────────────
 
-async def test_get_status_includes_current_step(tmp_app, project, store):
-    resource = store.get_or_create("hash-step-api", "Book")
-    store.attach(project.id, resource.id)
+async def test_get_status_includes_current_step(tmp_app, store):
+    resource = store.get_or_create("hash-status", "Book")
 
     transport = httpx.ASGITransport(app=tmp_app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
-        response = await client.get(
-            f"/projects/{project.id}/resources/{resource.id}/status"
-        )
+        response = await client.get(f"/resources/{resource.id}/status")
 
     assert response.status_code == 200
     body = response.json()
@@ -102,31 +147,25 @@ async def test_get_status_includes_current_step(tmp_app, project, store):
     assert body["current_step"] is None
 
 
-async def test_get_status_current_step_reflects_update_step(tmp_app, project, store):
-    resource = store.get_or_create("hash-step-api2", "Book")
-    store.attach(project.id, resource.id)
+async def test_get_status_current_step_reflects_update_step(tmp_app, store):
+    resource = store.get_or_create("hash-step-api", "Book")
     store.update_step(resource.id, "extracting")
 
     transport = httpx.ASGITransport(app=tmp_app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
-        response = await client.get(
-            f"/projects/{project.id}/resources/{resource.id}/status"
-        )
+        response = await client.get(f"/resources/{resource.id}/status")
 
     assert response.status_code == 200
     assert response.json()["current_step"] == "extracting"
 
 
-async def test_get_status_includes_fallback_counters(tmp_app, project, store):
+async def test_get_status_includes_fallback_counters(tmp_app, store):
     resource = store.get_or_create("hash-batches-api", "Book")
-    store.attach(project.id, resource.id)
     store.update_batches(resource.id, batches_total=4, batches_fallback=2)
 
     transport = httpx.ASGITransport(app=tmp_app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
-        response = await client.get(
-            f"/projects/{project.id}/resources/{resource.id}/status"
-        )
+        response = await client.get(f"/resources/{resource.id}/status")
 
     assert response.status_code == 200
     body = response.json()
@@ -134,11 +173,10 @@ async def test_get_status_includes_fallback_counters(tmp_app, project, store):
     assert body["batches_fallback"] == 2
 
 
-# ── Behavior 4: POST /projects/{id}/resources/{res_id}/reingest ──────────────
+# ── Behavior 6: POST /resources/{id}/reingest ────────────────────────────────
 
-async def test_reingest_returns_202_and_resets_to_queued(tmp_app, project, store):
+async def test_reingest_returns_202_and_resets_to_queued(tmp_app, store):
     resource = store.get_or_create("hash-reingest-api", "Book")
-    store.attach(project.id, resource.id)
     store.set_source_ref(resource.id, "book.pdf")
     store.update_status(resource.id, "ready")
     store.update_batches(resource.id, batches_total=4, batches_fallback=2)
@@ -146,7 +184,7 @@ async def test_reingest_returns_202_and_resets_to_queued(tmp_app, project, store
     transport = httpx.ASGITransport(app=tmp_app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
         response = await client.post(
-            f"/projects/{project.id}/resources/{resource.id}/reingest",
+            f"/resources/{resource.id}/reingest",
             json={"mode": "recursive"},
         )
 
@@ -157,33 +195,33 @@ async def test_reingest_returns_202_and_resets_to_queued(tmp_app, project, store
     assert status["batches_fallback"] == 0
 
 
-async def test_reingest_returns_404_for_unknown_resource(tmp_app, project):
+async def test_reingest_returns_404_for_unknown_resource(tmp_app):
     transport = httpx.ASGITransport(app=tmp_app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
         response = await client.post(
-            f"/projects/{project.id}/resources/no-such-id/reingest",
+            "/resources/no-such-id/reingest",
             json={"mode": "recursive"},
         )
 
     assert response.status_code == 404
 
 
-# ── Upload size cap ───────────────────────────────────────────────────────────
+# ── Behavior 7: old project-scoped routes are gone ───────────────────────────
 
-async def test_file_upload_exceeding_size_limit_returns_413(tmp_app, project):
-    """Files over MAX_UPLOAD_BYTES are rejected with 413 before ingestion."""
-    import backend.main as main_mod
-    original = main_mod.MAX_UPLOAD_BYTES
-    main_mod.MAX_UPLOAD_BYTES = 1024  # shrink to 1 KB for test
-    try:
-        content = b"x" * 1025
-        transport = httpx.ASGITransport(app=tmp_app)
-        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
-            response = await client.post(
-                f"/projects/{project.id}/resources/file",
-                files={"file": ("large.txt", content, "text/plain")},
-                data={"resource_type": "Book"},
-            )
-        assert response.status_code == 413
-    finally:
-        main_mod.MAX_UPLOAD_BYTES = original
+async def test_old_list_resources_route_is_gone(tmp_app):
+    transport = httpx.ASGITransport(app=tmp_app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get("/projects/proj-1/resources")
+
+    assert response.status_code == 404
+
+
+async def test_old_file_upload_route_is_gone(tmp_app):
+    transport = httpx.ASGITransport(app=tmp_app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post(
+            "/projects/proj-1/resources/file",
+            files={"file": ("f.txt", b"data", "text/plain")},
+        )
+
+    assert response.status_code == 404

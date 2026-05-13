@@ -211,7 +211,7 @@ it("seeds the tray from pre-existing indexing resources on mount", async () => {
 
   await screen.findByText("Pre-existing Book");
   expect(global.fetch).toHaveBeenCalledWith(
-    "http://127.0.0.1:8000/projects/proj-1/resources",
+    "http://127.0.0.1:8000/resources",
   );
   // "ready" resources are not seeded — they're already done
   expect(screen.queryByText("Already Done")).not.toBeInTheDocument();
@@ -391,7 +391,7 @@ it("clicking Re-ingest button POSTs to the reingest endpoint", async () => {
   );
 
   expect(fetchMock).toHaveBeenCalledWith(
-    "http://127.0.0.1:8000/projects/proj-1/resources/res-1/reingest",
+    "http://127.0.0.1:8000/resources/res-1/reingest",
     expect.objectContaining({
       method: "POST",
       body: JSON.stringify({ mode: "recursive" }),
@@ -420,7 +420,7 @@ describe("polling", () => {
     });
 
     expect(global.fetch).toHaveBeenCalledWith(
-      "http://127.0.0.1:8000/projects/proj-1/resources/res-1/status",
+      "http://127.0.0.1:8000/resources/res-1/status",
     );
   });
 

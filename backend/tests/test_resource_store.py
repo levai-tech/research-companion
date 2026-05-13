@@ -12,12 +12,6 @@ def store(tmp_path):
     return ResourceStore(base_dir=tmp_path)
 
 
-def _project_db(tmp_path, project_id):
-    project_dir = tmp_path / "projects" / project_id
-    project_dir.mkdir(parents=True, exist_ok=True)
-    return project_dir / "db.sqlite"
-
-
 # ── Behavior 1: schema ────────────────────────────────────────────────────────
 
 def test_schema_creates_resources_db_and_sources_dir(store, tmp_path):
@@ -55,17 +49,6 @@ def _seed_old_db(tmp_path):
     )
     con.execute("INSERT INTO resources VALUES ('r1','h1','Book','ready','{}','2026-01-01')")
     con.execute("INSERT INTO chunks VALUES ('c1','r1','old text',0)")
-    # per-project DB
-    proj_dir = tmp_path / "projects" / "proj-old"
-    proj_dir.mkdir(parents=True)
-    pcon = sqlite3.connect(proj_dir / "db.sqlite")
-    pcon.execute(
-        "CREATE TABLE project_resources (project_id TEXT NOT NULL, resource_id TEXT NOT NULL,"
-        " added_at TEXT NOT NULL, PRIMARY KEY (project_id, resource_id))"
-    )
-    pcon.execute("INSERT INTO project_resources VALUES ('proj-old','r1','2026-01-01')")
-    pcon.commit()
-    pcon.close()
     con.commit()
     con.close()
 
@@ -79,15 +62,6 @@ def test_destructive_migration_drops_chunks_and_resources(tmp_path):
     con.close()
     assert resources_count == 0
     assert chunks_count == 0
-
-
-def test_destructive_migration_drops_project_resources(tmp_path):
-    _seed_old_db(tmp_path)
-    ResourceStore(base_dir=tmp_path)
-    pcon = sqlite3.connect(tmp_path / "projects" / "proj-old" / "db.sqlite")
-    count = pcon.execute("SELECT COUNT(*) FROM project_resources").fetchone()[0]
-    pcon.close()
-    assert count == 0
 
 
 def test_destructive_migration_wipes_sources_dir(tmp_path):
@@ -308,92 +282,27 @@ def test_get_or_create_clears_partial_chunks_on_failed_reset(store):
     assert chunk_count == 0
 
 
-# ── Behavior 4: attach ────────────────────────────────────────────────────────
+# ── Behavior 4: list_all ──────────────────────────────────────────────────────
 
-def test_attach_writes_project_resources_row_in_per_project_db(store, tmp_path):
-    resource = store.get_or_create("abc123", "Book")
-    project_db = _project_db(tmp_path, "proj-1")
-
-    store.attach("proj-1", resource.id)
-
-    con = sqlite3.connect(project_db)
-    row = con.execute(
-        "SELECT project_id, resource_id FROM project_resources WHERE project_id='proj-1'"
-    ).fetchone()
-    con.close()
-    assert row == ("proj-1", resource.id)
+def test_list_all_returns_empty_when_no_resources(store):
+    assert store.list_all() == []
 
 
-def test_attach_is_idempotent(store, tmp_path):
-    resource = store.get_or_create("abc123", "Book")
-    store.attach("proj-1", resource.id)
-    store.attach("proj-1", resource.id)  # should not raise
-
-    con = sqlite3.connect(_project_db(tmp_path, "proj-1"))
-    count = con.execute(
-        "SELECT COUNT(*) FROM project_resources WHERE project_id='proj-1'"
-    ).fetchone()[0]
-    con.close()
-    assert count == 1
-
-
-# ── Behavior 5: list_for_project ──────────────────────────────────────────────
-
-def test_list_for_project_returns_empty_when_nothing_attached(store):
-    assert store.list_for_project("proj-1") == []
-
-
-def test_list_for_project_returns_attached_resources(store):
+def test_list_all_returns_all_resources(store):
     r1 = store.get_or_create("hash-a", "Book")
     r2 = store.get_or_create("hash-b", "Press/Journal Article")
-    store.attach("proj-1", r1.id)
-    store.attach("proj-1", r2.id)
 
-    resources = store.list_for_project("proj-1")
+    resources = store.list_all()
     ids = {r.id for r in resources}
     assert ids == {r1.id, r2.id}
 
 
-def test_list_for_project_does_not_return_resources_from_other_projects(store):
-    r1 = store.get_or_create("hash-a", "Book")
-    r2 = store.get_or_create("hash-b", "Book")
-    store.attach("proj-1", r1.id)
-    store.attach("proj-2", r2.id)
+# ── Behavior 5: delete ───────────────────────────────────────────────────────
 
-    resources = store.list_for_project("proj-1")
-    assert len(resources) == 1
-    assert resources[0].id == r1.id
-
-
-# ── Behavior 6: detach non-last reference ─────────────────────────────────────
-
-def test_detach_removes_join_row(store):
+def test_delete_removes_resource_row(store, tmp_path):
     resource = store.get_or_create("hash-a", "Book")
-    store.attach("proj-1", resource.id)
-    store.detach("proj-1", resource.id)
 
-    assert store.list_for_project("proj-1") == []
-
-
-def test_detach_non_last_reference_preserves_resource(store, tmp_path):
-    resource = store.get_or_create("hash-a", "Book")
-    store.attach("proj-1", resource.id)
-    store.attach("proj-2", resource.id)
-
-    store.detach("proj-1", resource.id)
-
-    con = sqlite3.connect(tmp_path / "resources.db")
-    row = con.execute("SELECT id FROM resources WHERE id=?", (resource.id,)).fetchone()
-    con.close()
-    assert row is not None, "Resource should survive while proj-2 still references it"
-
-
-# ── Behavior 7: detach last reference ────────────────────────────────────────
-
-def test_detach_last_reference_deletes_resource_row(store, tmp_path):
-    resource = store.get_or_create("hash-a", "Book")
-    store.attach("proj-1", resource.id)
-    store.detach("proj-1", resource.id)
+    store.delete(resource.id)
 
     con = sqlite3.connect(tmp_path / "resources.db")
     row = con.execute("SELECT id FROM resources WHERE id=?", (resource.id,)).fetchone()
@@ -401,9 +310,8 @@ def test_detach_last_reference_deletes_resource_row(store, tmp_path):
     assert row is None
 
 
-def test_detach_last_reference_deletes_chunks_and_embeddings(store, tmp_path):
+def test_delete_removes_chunks_and_embeddings(store, tmp_path):
     resource = store.get_or_create("hash-a", "Book")
-    # Seed a chunk + embedding directly so we can verify cascade deletion
     con = sqlite3.connect(tmp_path / "resources.db")
     con.enable_load_extension(True)
     sqlite_vec.load(con)
@@ -413,44 +321,40 @@ def test_detach_last_reference_deletes_chunks_and_embeddings(store, tmp_path):
         "INSERT INTO chunks (id, resource_id, text, position) VALUES (?, ?, ?, ?)",
         (chunk_id, resource.id, "some text", 0),
     )
-    embedding = [0.1] * 384
     con.execute(
         "INSERT INTO embeddings (chunk_id, embedding) VALUES (?, ?)",
-        (chunk_id, json.dumps(embedding)),
+        (chunk_id, json.dumps([0.1] * 384)),
     )
     con.commit()
     con.close()
 
-    store.attach("proj-1", resource.id)
-    store.detach("proj-1", resource.id)
+    store.delete(resource.id)
 
     con = sqlite3.connect(tmp_path / "resources.db")
     con.enable_load_extension(True)
     sqlite_vec.load(con)
     con.enable_load_extension(False)
     chunk_row = con.execute("SELECT id FROM chunks WHERE id=?", (chunk_id,)).fetchone()
-    embedding_row = con.execute("SELECT chunk_id FROM embeddings WHERE chunk_id=?", (chunk_id,)).fetchone()
+    emb_row = con.execute("SELECT chunk_id FROM embeddings WHERE chunk_id=?", (chunk_id,)).fetchone()
     con.close()
     assert chunk_row is None
-    assert embedding_row is None
+    assert emb_row is None
 
 
-def test_detach_last_reference_deletes_raw_file(store, tmp_path):
+def test_delete_removes_raw_file(store, tmp_path):
     resource = store.get_or_create("sha256offile", "Book")
     raw_file = tmp_path / "sources" / "sha256offile"
     raw_file.write_bytes(b"fake file content")
 
-    store.attach("proj-1", resource.id)
-    store.detach("proj-1", resource.id)
+    store.delete(resource.id)
 
     assert not raw_file.exists()
 
 
-# ── Behavior 8: search returns location ───────────────────────────────────────
+# ── Behavior 6: search returns location ──────────────────────────────────────
 
 def test_search_results_include_location(store):
     resource = store.get_or_create("hash-search", "Book")
-    store.update_status(resource.id, "ready")
     store.store_chunks_and_embeddings(
         resource.id,
         chunks=["hello world"],
@@ -459,9 +363,8 @@ def test_search_results_include_location(store):
         embedder_id="e",
         locations=["p. 7"],
     )
-    store.attach("proj-search", resource.id)
 
-    results = store.search("proj-search", [0.1] * 384, top_k=1)
+    results = store.search([0.1] * 384, top_k=1)
 
     assert len(results) == 1
     assert results[0]["location"] == "p. 7"
@@ -469,7 +372,6 @@ def test_search_results_include_location(store):
 
 def test_search_results_location_is_none_when_not_stored(store):
     resource = store.get_or_create("hash-search-null", "Book")
-    store.update_status(resource.id, "ready")
     store.store_chunks_and_embeddings(
         resource.id,
         chunks=["hello world"],
@@ -477,9 +379,8 @@ def test_search_results_location_is_none_when_not_stored(store):
         chunker_id="c",
         embedder_id="e",
     )
-    store.attach("proj-search-null", resource.id)
 
-    results = store.search("proj-search-null", [0.1] * 384, top_k=1)
+    results = store.search([0.1] * 384, top_k=1)
 
     assert len(results) == 1
     assert results[0]["location"] is None

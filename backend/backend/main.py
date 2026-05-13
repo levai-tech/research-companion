@@ -192,15 +192,16 @@ def create_app(settings_path: Path | None = None, projects_dir: Path | None = No
             raise HTTPException(status_code=404, detail="Transcript not found")
         return transcript.to_dict()
 
-    @app.post("/projects/{project_id}/resources/file", status_code=202)
+    @app.get("/resources")
+    async def list_resources():
+        return [r.to_dict() for r in resource_store.list_all()]
+
+    @app.post("/resources/file", status_code=202)
     async def post_resource_file(
-        project_id: str,
         resource_type: str = "Book",
         citation_metadata: str = Form(default="{}"),
         file: UploadFile = File(...),
     ):
-        if project_service.get(project_id) is None:
-            raise HTTPException(status_code=404, detail="Project not found")
         try:
             meta = json.loads(citation_metadata) if citation_metadata else {}
         except json.JSONDecodeError:
@@ -209,7 +210,6 @@ def create_app(settings_path: Path | None = None, projects_dir: Path | None = No
         if len(content) > MAX_UPLOAD_BYTES:
             raise HTTPException(status_code=413, detail="File exceeds 200 MB limit")
         result = ingestion_service.accept_file(
-            project_id=project_id,
             content=content,
             resource_type=resource_type,
             citation_metadata=meta or None,
@@ -224,19 +224,13 @@ def create_app(settings_path: Path | None = None, projects_dir: Path | None = No
         resource = resource_store.get(result["resource_id"])
         return resource.to_dict() if resource else result
 
-    @app.post("/projects/{project_id}/resources/url", status_code=202)
-    async def post_resource_url(
-        project_id: str,
-        body: dict,
-    ):
-        if project_service.get(project_id) is None:
-            raise HTTPException(status_code=404, detail="Project not found")
+    @app.post("/resources/url", status_code=202)
+    async def post_resource_url(body: dict):
         url = body.get("url", "").strip()
         if not url:
             raise HTTPException(status_code=422, detail="url is required")
         meta = body.get("citation_metadata") or {}
         result = ingestion_service.accept_url(
-            project_id=project_id,
             url=url,
             citation_metadata=meta or None,
         )
@@ -249,19 +243,15 @@ def create_app(settings_path: Path | None = None, projects_dir: Path | None = No
         resource = resource_store.get(result["resource_id"])
         return resource.to_dict() if resource else result
 
-    @app.get("/projects/{project_id}/resources/{resource_id}/status")
-    async def get_resource_status(project_id: str, resource_id: str):
-        if project_service.get(project_id) is None:
-            raise HTTPException(status_code=404, detail="Project not found")
+    @app.get("/resources/{resource_id}/status")
+    async def get_resource_status(resource_id: str):
         status = ingestion_service.get_status(resource_id)
         if status is None:
             raise HTTPException(status_code=404, detail="Resource not found")
         return status
 
-    @app.post("/projects/{project_id}/resources/{resource_id}/reingest", status_code=202)
-    async def reingest_resource(project_id: str, resource_id: str, body: dict):
-        if project_service.get(project_id) is None:
-            raise HTTPException(status_code=404, detail="Project not found")
+    @app.post("/resources/{resource_id}/reingest", status_code=202)
+    async def reingest_resource(resource_id: str, body: dict):
         resource = resource_store.get(resource_id)
         if resource is None:
             raise HTTPException(status_code=404, detail="Resource not found")
@@ -276,29 +266,17 @@ def create_app(settings_path: Path | None = None, projects_dir: Path | None = No
             runner.enqueue_file(resource_id, source or "upload", si_model, si_key, force_recursive=True)
         return {"ok": True}
 
-    @app.get("/projects/{project_id}/resources/search")
-    async def search_resources(project_id: str, q: str, top_k: int = 10):
-        if project_service.get(project_id) is None:
-            raise HTTPException(status_code=404, detail="Project not found")
+    @app.get("/resources/search")
+    async def search_resources(q: str, top_k: int = 10):
         query_embedding = ingestion_service.embedder.embed([q])[0]
-        results = resource_store.search(project_id, query_embedding, top_k)
+        results = resource_store.search(query_embedding, top_k)
         return {"results": results}
 
-    @app.get("/projects/{project_id}/resources")
-    async def list_resources(project_id: str):
-        if project_service.get(project_id) is None:
-            raise HTTPException(status_code=404, detail="Project not found")
-        resources = resource_store.list_for_project(project_id)
-        return [r.to_dict() for r in resources]
-
-    @app.delete("/projects/{project_id}/resources/{resource_id}")
-    async def delete_resource(project_id: str, resource_id: str):
-        if project_service.get(project_id) is None:
-            raise HTTPException(status_code=404, detail="Project not found")
-        attached = resource_store.list_for_project(project_id)
-        if not any(r.id == resource_id for r in attached):
+    @app.delete("/resources/{resource_id}")
+    async def delete_resource(resource_id: str):
+        if resource_store.get(resource_id) is None:
             raise HTTPException(status_code=404, detail="Resource not found")
-        resource_store.detach(project_id, resource_id)
+        resource_store.delete(resource_id)
         return {"ok": True}
 
     @app.post("/interview")

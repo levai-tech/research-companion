@@ -83,7 +83,7 @@ it("shows each resource's title, type, and indexing status badge", async () => {
   expect(screen.getByText("queued")).toBeInTheDocument();
 
   expect(global.fetch).toHaveBeenCalledWith(
-    "http://127.0.0.1:8000/projects/proj-1/resources",
+    "http://127.0.0.1:8000/resources",
   );
 });
 
@@ -143,7 +143,7 @@ describe("ResourcesTab — delete resource", () => {
     await userEvent.click(deleteButtons[0]);
 
     expect(global.fetch).toHaveBeenCalledWith(
-      "http://127.0.0.1:8000/projects/proj-1/resources/res-1",
+      "http://127.0.0.1:8000/resources/res-1",
       expect.objectContaining({ method: "DELETE" }),
     );
 
@@ -178,7 +178,7 @@ it("submitting the search form calls the search endpoint with the query", async 
   await userEvent.click(screen.getByRole("button", { name: /^search$/i }));
 
   expect(global.fetch).toHaveBeenCalledWith(
-    expect.stringContaining("/projects/proj-1/resources/search?q=quantum"),
+    expect.stringContaining("/resources/search?q=quantum"),
   );
 });
 

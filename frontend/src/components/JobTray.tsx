@@ -53,7 +53,7 @@ export default function JobTray({ projectId }: Props) {
   // Seed from resource list on mount
   useEffect(() => {
     if (!port) return;
-    fetch(`http://127.0.0.1:${port}/projects/${projectId}/resources`)
+    fetch(`http://127.0.0.1:${port}/resources`)
       .then((r) => r.json())
       .then((resources: Resource[]) => {
         resources
@@ -81,7 +81,7 @@ export default function JobTray({ projectId }: Props) {
       );
       activeJobs.forEach((job) => {
         fetch(
-          `http://127.0.0.1:${port}/projects/${job.projectId}/resources/${job.resourceId}/status`,
+          `http://127.0.0.1:${port}/resources/${job.resourceId}/status`,
         )
           .then((r) => r.json())
           .then((status: StatusResponse) => {
@@ -215,7 +215,7 @@ export default function JobTray({ projectId }: Props) {
                 className="text-xs text-amber-700 hover:text-amber-900"
                 onClick={() =>
                   fetch(
-                    `http://127.0.0.1:${port}/projects/${job.projectId}/resources/${job.resourceId}/reingest`,
+                    `http://127.0.0.1:${port}/resources/${job.resourceId}/reingest`,
                     {
                       method: "POST",
                       headers: { "Content-Type": "application/json" },

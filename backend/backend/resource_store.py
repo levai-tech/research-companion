@@ -73,22 +73,13 @@ CREATE VIRTUAL TABLE IF NOT EXISTS embeddings USING vec0(
 )
 """
 
-_CREATE_PROJECT_RESOURCES = """
-CREATE TABLE IF NOT EXISTS project_resources (
-    project_id  TEXT NOT NULL,
-    resource_id TEXT NOT NULL,
-    added_at    TEXT NOT NULL,
-    PRIMARY KEY (project_id, resource_id)
-)
-"""
-
 _CREATE_SCHEMA_VERSION = """
 CREATE TABLE IF NOT EXISTS schema_version (
     version INTEGER PRIMARY KEY
 )
 """
 
-_SCHEMA_VERSION = 3
+_SCHEMA_VERSION = 4
 
 
 class ResourceStore:
@@ -118,18 +109,6 @@ class ResourceStore:
     def _destructive_migrate(self, con: sqlite3.Connection) -> None:
         for table in ("chunks", "embeddings", "resources"):
             con.execute(f"DROP TABLE IF EXISTS {table}")
-        projects_dir = self._base_dir / "projects"
-        if projects_dir.exists():
-            for project_dir in projects_dir.iterdir():
-                db_path = project_dir / "db.sqlite"
-                if not db_path.exists():
-                    continue
-                pcon = sqlite3.connect(db_path)
-                try:
-                    pcon.execute("DELETE FROM project_resources")
-                    pcon.commit()
-                finally:
-                    pcon.close()
         if self._sources_dir.exists():
             shutil.rmtree(self._sources_dir)
             self._sources_dir.mkdir()
@@ -147,13 +126,6 @@ class ResourceStore:
             con.execute(_CREATE_RESOURCES)
             con.execute(_CREATE_CHUNKS)
             con.execute(_CREATE_EMBEDDINGS)
-
-    def _project_con(self, project_id: str) -> sqlite3.Connection:
-        db_path = self._base_dir / "projects" / project_id / "db.sqlite"
-        db_path.parent.mkdir(parents=True, exist_ok=True)
-        con = sqlite3.connect(db_path)
-        con.execute(_CREATE_PROJECT_RESOURCES)
-        return con
 
     def _row_to_resource(self, row: tuple) -> Resource:
         return Resource(
@@ -375,33 +347,11 @@ class ResourceStore:
                 (chunker_id, embedder_id, len(chunks), len(chunks), resource_id),
             )
 
-    def attach(self, project_id: str, resource_id: str) -> None:
-        added_at = datetime.now(timezone.utc).isoformat()
-        con = self._project_con(project_id)
-        con.execute(
-            "INSERT OR IGNORE INTO project_resources (project_id, resource_id, added_at) VALUES (?, ?, ?)",
-            (project_id, resource_id, added_at),
-        )
-        con.commit()
-        con.close()
-
-    def list_for_project(self, project_id: str) -> list[Resource]:
-        proj_con = self._project_con(project_id)
-        resource_ids = [
-            r[0] for r in proj_con.execute(
-                "SELECT resource_id FROM project_resources WHERE project_id = ?",
-                (project_id,),
-            ).fetchall()
-        ]
-        proj_con.close()
-        if not resource_ids:
-            return []
+    def list_all(self) -> list[Resource]:
         with self._db() as con:
-            placeholders = ",".join("?" * len(resource_ids))
             rows = con.execute(
-                f"SELECT id, content_hash, resource_type, indexing_status, citation_metadata, created_at"
-                f" FROM resources WHERE id IN ({placeholders})",
-                resource_ids,
+                "SELECT id, content_hash, resource_type, indexing_status, citation_metadata, created_at"
+                " FROM resources ORDER BY created_at DESC"
             ).fetchall()
         return [
             Resource(
@@ -414,27 +364,13 @@ class ResourceStore:
 
     def search(
         self,
-        project_id: str,
         query_embedding: list[float],
         top_k: int = 10,
     ) -> list[dict]:
-        proj_con = self._project_con(project_id)
-        resource_ids = [
-            r[0] for r in proj_con.execute(
-                "SELECT resource_id FROM project_resources WHERE project_id = ?",
-                (project_id,),
-            ).fetchall()
-        ]
-        proj_con.close()
-        if not resource_ids:
-            return []
-
         with self._db() as con:
-            placeholders = ",".join("?" * len(resource_ids))
             ready_ids = {
                 r[0] for r in con.execute(
-                    f"SELECT id FROM resources WHERE id IN ({placeholders}) AND indexing_status = 'ready'",
-                    resource_ids,
+                    "SELECT id FROM resources WHERE indexing_status = 'ready'"
                 ).fetchall()
             }
             if not ready_ids:
@@ -465,45 +401,7 @@ class ResourceStore:
 
         return results
 
-    def detach(self, project_id: str, resource_id: str) -> None:
-        proj_con = self._project_con(project_id)
-        proj_con.execute(
-            "DELETE FROM project_resources WHERE project_id = ? AND resource_id = ?",
-            (project_id, resource_id),
-        )
-        proj_con.commit()
-        proj_con.close()
-
-        if not self._is_referenced(resource_id, exclude_project=project_id):
-            self._delete_resource(resource_id)
-
-    def _is_referenced(self, resource_id: str, exclude_project: str) -> bool:
-        projects_dir = self._base_dir / "projects"
-        if not projects_dir.exists():
-            return False
-        for project_dir in projects_dir.iterdir():
-            if project_dir.name == exclude_project:
-                continue
-            db_path = project_dir / "db.sqlite"
-            if not db_path.exists():
-                continue
-            con = sqlite3.connect(db_path)
-            has_table = con.execute(
-                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='project_resources'"
-            ).fetchone()
-            if not has_table:
-                con.close()
-                continue
-            row = con.execute(
-                "SELECT 1 FROM project_resources WHERE resource_id = ? LIMIT 1",
-                (resource_id,),
-            ).fetchone()
-            con.close()
-            if row:
-                return True
-        return False
-
-    def _delete_resource(self, resource_id: str) -> None:
+    def delete(self, resource_id: str) -> None:
         with self._db() as con:
             chunk_ids = [
                 r[0] for r in con.execute(

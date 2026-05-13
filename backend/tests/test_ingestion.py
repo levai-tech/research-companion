@@ -50,19 +50,16 @@ def service(store):
 
 def test_file_upload_new_resource_returns_queued(service):
     content = b"some file content"
-    result = service.accept_file(project_id="proj-1", content=content, resource_type="Book")
+    result = service.accept_file(content=content, resource_type="Book")
     assert result["indexing_status"] == "queued"
     assert result["resource_id"]
 
 
 def test_file_upload_uses_sha256_as_identity(service):
     content = b"hello"
-    sha256 = hashlib.sha256(content).hexdigest()
-    result = service.accept_file(project_id="proj-1", content=content, resource_type="Book")
-    # The store key is the sha256
+    result = service.accept_file(content=content, resource_type="Book")
     assert result["resource_id"]
-    # Calling again should deduplicate
-    result2 = service.accept_file(project_id="proj-1", content=content, resource_type="Book")
+    result2 = service.accept_file(content=content, resource_type="Book")
     assert result["resource_id"] == result2["resource_id"]
 
 
@@ -74,25 +71,15 @@ def test_file_upload_dedup_existing_ready_returns_ready(service, store):
     resource = store.get_or_create(sha256, "Book")
     store.update_status(resource.id, "ready")
 
-    result = service.accept_file(project_id="proj-1", content=content, resource_type="Book")
+    result = service.accept_file(content=content, resource_type="Book")
     assert result["indexing_status"] == "ready"
     assert result["resource_id"] == resource.id
-
-
-def test_file_upload_dedup_attaches_to_project(service, store):
-    content = b"same content"
-    sha256 = hashlib.sha256(content).hexdigest()
-    resource = store.get_or_create(sha256, "Book")
-    store.update_status(resource.id, "ready")
-
-    service.accept_file(project_id="proj-1", content=content, resource_type="Book")
-    assert any(r.id == resource.id for r in store.list_for_project("proj-1"))
 
 
 # ── Slice 3c: URL upload — new resource ──────────────────────────────────────
 
 def test_url_upload_new_resource_returns_queued(service):
-    result = service.accept_url(project_id="proj-1", url="https://example.com/article")
+    result = service.accept_url(url="https://example.com/article")
     assert result["indexing_status"] == "queued"
     assert result["resource_id"]
 
@@ -104,7 +91,7 @@ def test_url_upload_dedup_existing_ready_returns_ready(service, store):
     resource = store.get_or_create(normalized, "Webpage")
     store.update_status(resource.id, "ready")
 
-    result = service.accept_url(project_id="proj-1", url=normalized)
+    result = service.accept_url(url=normalized)
     assert result["indexing_status"] == "ready"
     assert result["resource_id"] == resource.id
 
@@ -116,7 +103,7 @@ def test_url_fragment_is_stripped(service, store):
     resource = store.get_or_create(normalized, "Webpage")
     store.update_status(resource.id, "ready")
 
-    result = service.accept_url(project_id="proj-1", url="https://example.com/page#intro")
+    result = service.accept_url(url="https://example.com/page#intro")
     assert result["resource_id"] == resource.id
 
 
@@ -125,14 +112,14 @@ def test_url_scheme_and_host_are_lowercased(service, store):
     resource = store.get_or_create(normalized, "Webpage")
     store.update_status(resource.id, "ready")
 
-    result = service.accept_url(project_id="proj-1", url="HTTPS://EXAMPLE.COM/page")
+    result = service.accept_url(url="HTTPS://EXAMPLE.COM/page")
     assert result["resource_id"] == resource.id
 
 
 # ── Slice 4: status query ─────────────────────────────────────────────────────
 
 def test_get_status_returns_queued_after_accept(service):
-    result = service.accept_file(project_id="proj-1", content=b"data", resource_type="Book")
+    result = service.accept_file(content=b"data", resource_type="Book")
     status = service.get_status(result["resource_id"])
     assert status["indexing_status"] == "queued"
     assert "chunks_done" in status
@@ -218,7 +205,7 @@ def test_run_ingestion_sets_chunking_then_embedding_steps(store):
 def test_run_file_pipeline_sets_extracting_step(store):
     service = IngestionService(store=store, chunker=FakeChunker(), embedder=FakeEmbedder())
     content = b"Hello world text."
-    result = service.accept_file(project_id="p1", content=content, resource_type="Book")
+    result = service.accept_file(content=content, resource_type="Book")
     resource_id = result["resource_id"]
 
     step_calls = []
@@ -239,7 +226,7 @@ def test_run_file_pipeline_sets_extracting_step(store):
 
 def test_run_url_pipeline_sets_extracting_step(store):
     service = IngestionService(store=store, chunker=FakeChunker(), embedder=FakeEmbedder())
-    result = service.accept_url(project_id="p1", url="https://example.com/page")
+    result = service.accept_url(url="https://example.com/page")
     resource_id = result["resource_id"]
 
     step_calls = []
