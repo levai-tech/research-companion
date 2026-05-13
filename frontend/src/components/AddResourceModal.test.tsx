@@ -40,8 +40,8 @@ function renderModal(overrides = {}) {
 it("shows File tab selected by default with file picker and resource type control", () => {
   renderModal();
 
-  const fileTab = screen.getByRole("radio", { name: /file/i });
-  expect(fileTab).toBeChecked();
+  const fileTab = screen.getByRole("button", { name: /upload file/i });
+  expect(fileTab).toHaveAttribute("aria-pressed", "true");
 
   expect(screen.getByTestId("file-input")).toBeInTheDocument();
   expect(screen.getByRole("radio", { name: /book/i })).toBeInTheDocument();
@@ -54,7 +54,7 @@ it("shows File tab selected by default with file picker and resource type contro
 it("switching to URL path shows URL input and hides resource type control", async () => {
   renderModal();
 
-  await userEvent.click(screen.getByRole("radio", { name: /url/i }));
+  await userEvent.click(screen.getByRole("button", { name: /paste url/i }));
 
   expect(screen.getByRole("textbox", { name: /url/i })).toBeInTheDocument();
   expect(screen.queryByRole("radio", { name: /book/i })).not.toBeInTheDocument();
@@ -94,7 +94,7 @@ describe("AddResourceModal — metadata fields", () => {
   it("Webpage: shows author/org, page title, site name, publication date; URL input contains typed value", async () => {
     renderModal();
 
-    await userEvent.click(screen.getByRole("radio", { name: /url/i }));
+    await userEvent.click(screen.getByRole("button", { name: /paste url/i }));
     const urlInput = screen.getByRole("textbox", { name: /url/i });
     await userEvent.type(urlInput, "https://example.com");
 
@@ -137,7 +137,7 @@ it("submitting a file calls POST /resources/file and fires onResourceAdded with 
   const fileInput = screen.getByTestId("file-input") as HTMLInputElement;
   await userEvent.upload(fileInput, file);
 
-  await userEvent.click(screen.getByRole("button", { name: /add resource/i }));
+  await userEvent.click(screen.getByRole("button", { name: /add to library/i }));
 
   const call = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
   expect(call[0]).toContain("/resources/file");
@@ -165,13 +165,13 @@ it("submitting a URL calls POST /resources/url and fires onResourceAdded with qu
     />,
   );
 
-  await userEvent.click(screen.getByRole("radio", { name: /url/i }));
+  await userEvent.click(screen.getByRole("button", { name: /paste url/i }));
   await userEvent.type(
     screen.getByRole("textbox", { name: /url/i }),
     "https://example.com",
   );
 
-  await userEvent.click(screen.getByRole("button", { name: /add resource/i }));
+  await userEvent.click(screen.getByRole("button", { name: /add to library/i }));
 
   const call = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
   expect(call[0]).toContain("/resources/url");
