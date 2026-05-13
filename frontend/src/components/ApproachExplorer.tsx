@@ -13,6 +13,21 @@ interface ApproachExplorerProps {
   onComplete: () => void;
 }
 
+const primaryBtn: React.CSSProperties = {
+  height: 34, padding: "0 14px", borderRadius: 8, border: "none",
+  background: "var(--brand-navy-800)", color: "var(--paper-0)",
+  fontFamily: "var(--font-sans)", fontSize: 13, fontWeight: 500, cursor: "pointer",
+  transition: "background 140ms var(--ease-out)",
+};
+
+const outlineBtn: React.CSSProperties = {
+  height: 34, padding: "0 14px", borderRadius: 8,
+  border: "1px solid var(--border-strong)", background: "var(--surface)",
+  color: "var(--foreground)", fontFamily: "var(--font-sans)",
+  fontSize: 13, fontWeight: 500, cursor: "pointer",
+  transition: "background 140ms var(--ease-out)",
+};
+
 export default function ApproachExplorer({ projectId, transcriptSummary, onComplete }: ApproachExplorerProps) {
   const port = useAppStore((s) => s.backendPort);
   const [approaches, setApproaches] = useState<Approach[]>([]);
@@ -53,75 +68,82 @@ export default function ApproachExplorer({ projectId, transcriptSummary, onCompl
     onComplete();
   }
 
-  if (isLoading) return <div className="p-6">Loading approaches…</div>;
+  if (isLoading) {
+    return (
+      <div style={{ padding: 24, fontFamily: "var(--font-sans)", fontSize: 13, color: "var(--foreground-muted)" }}>
+        Loading approaches…
+      </div>
+    );
+  }
 
-  if (error) return (
-    <div className="p-6 flex flex-col gap-3">
-      <p className="text-destructive text-sm">{error}</p>
-      <button className="self-start rounded border px-3 py-1.5 text-sm" onClick={propose}>Try again</button>
-    </div>
-  );
+  if (error) {
+    return (
+      <div style={{ padding: 24, display: "flex", flexDirection: "column", gap: 12 }}>
+        <p style={{ fontFamily: "var(--font-sans)", fontSize: 13, color: "var(--signal-danger)", margin: 0 }}>{error}</p>
+        <button style={{ ...outlineBtn, alignSelf: "flex-start" }} onClick={propose}>Try again</button>
+      </div>
+    );
+  }
 
   return (
-    <div className="flex flex-col gap-4 p-6">
-      <div className="flex flex-col gap-3">
-        {approaches.map((approach, i) => (
-          <div
-            key={i}
-            className={`rounded border p-4 transition-colors ${selectedIndex === i ? "bg-blue-50 border-blue-300" : ""}`}
-          >
-            <div className="flex items-start gap-3">
-              <input
-                type="radio"
-                name="approach-select"
-                checked={selectedIndex === i}
-                onChange={() => setSelectedIndex(i)}
-                className="mt-1"
-              />
-              <div className="flex-1">
-                {editingIndex === i ? (
-                  <>
-                    <input
-                      className="mb-1 w-full rounded border px-2 py-1 font-semibold"
-                      value={approach.title}
-                      onChange={(e) => setField(i, "title", e.target.value)}
-                      autoFocus
-                    />
-                    <textarea
-                      className="w-full rounded border px-2 py-1 text-sm"
-                      value={approach.description}
-                      onChange={(e) => setField(i, "description", e.target.value)}
-                      onBlur={() => setEditingIndex(null)}
-                      rows={2}
-                    />
-                  </>
-                ) : (
-                  <>
-                    <p className="font-semibold">{approach.title}</p>
-                    <p className="text-sm">{approach.description}</p>
-                  </>
-                )}
+    <div style={{ padding: 24, maxWidth: 760, margin: "0 auto", display: "flex", flexDirection: "column", gap: 16 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        {approaches.map((approach, i) => {
+          const isSelected = selectedIndex === i;
+          return (
+            <div
+              key={i}
+              style={{ background: "var(--surface)", border: `1px solid ${isSelected ? "var(--brand-navy-800)" : "var(--border)"}`, borderRadius: 12, padding: "14px 18px", boxShadow: "var(--shadow-xs)", cursor: "pointer", transition: "border-color 140ms var(--ease-out)" }}
+              onClick={() => setSelectedIndex(i)}
+            >
+              <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
+                <div style={{ marginTop: 2, width: 16, height: 16, borderRadius: 999, border: `2px solid ${isSelected ? "var(--brand-navy-800)" : "var(--border-strong)"}`, background: isSelected ? "var(--brand-navy-800)" : "transparent", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  {isSelected && <div style={{ width: 6, height: 6, borderRadius: 999, background: "var(--paper-0)" }} />}
+                </div>
+                <div style={{ flex: 1 }}>
+                  {editingIndex === i ? (
+                    <>
+                      <input
+                        style={{ marginBottom: 6, width: "100%", height: 32, padding: "0 10px", borderRadius: 6, border: "1px solid var(--border-strong)", background: "var(--surface)", fontFamily: "var(--font-sans)", fontSize: 13, fontWeight: 600, color: "var(--foreground)", outline: "none" }}
+                        value={approach.title}
+                        onChange={(e) => setField(i, "title", e.target.value)}
+                        autoFocus
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                      <textarea
+                        style={{ width: "100%", padding: "6px 10px", borderRadius: 6, border: "1px solid var(--border-strong)", background: "var(--surface)", fontFamily: "var(--font-sans)", fontSize: 13, color: "var(--foreground)", outline: "none", resize: "vertical" }}
+                        value={approach.description}
+                        onChange={(e) => setField(i, "description", e.target.value)}
+                        onBlur={() => setEditingIndex(null)}
+                        rows={2}
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                    </>
+                  ) : (
+                    <>
+                      <p style={{ fontFamily: "var(--font-sans)", fontSize: 14, fontWeight: 600, color: "var(--foreground)", margin: "0 0 4px" }}>{approach.title}</p>
+                      <p style={{ fontFamily: "var(--font-sans)", fontSize: 13, lineHeight: 1.55, color: "var(--foreground-muted)", margin: 0 }}>{approach.description}</p>
+                    </>
+                  )}
+                </div>
+                <button
+                  aria-label="Edit"
+                  style={{ width: 28, height: 28, border: "none", background: "transparent", borderRadius: 6, color: "var(--foreground-muted)", cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0, transition: "background 140ms var(--ease-out)" }}
+                  onClick={(e) => { e.stopPropagation(); setEditingIndex(editingIndex === i ? null : i); }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = "var(--surface-sunken)"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                >
+                  <Pencil size={14} />
+                </button>
               </div>
-              <button
-                aria-label="Edit"
-                onClick={() => setEditingIndex(editingIndex === i ? null : i)}
-                className="rounded p-1 hover:bg-muted"
-              >
-                <Pencil size={16} />
-              </button>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
-      <div className="flex gap-2">
+      <div style={{ display: "flex", gap: 8 }}>
+        <button style={outlineBtn} onClick={propose}>Show me more options</button>
         <button
-          className="rounded border px-3 py-1.5 text-sm"
-          onClick={propose}
-        >
-          Show me more options
-        </button>
-        <button
-          className="rounded bg-primary px-4 py-2 text-sm text-primary-foreground disabled:opacity-50"
+          style={{ ...primaryBtn, opacity: selectedIndex === null ? 0.5 : 1, cursor: selectedIndex === null ? "default" : "pointer" }}
           disabled={selectedIndex === null}
           onClick={handleConfirm}
         >

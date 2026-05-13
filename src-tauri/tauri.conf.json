@@ -1,5 +1,5 @@
 {
-  "productName": "Research Companion",
+  "productName": "Buddy",
   "version": "0.1.0",
   "identifier": "tech.levai.research-companion",
   "build": {
@@ -11,9 +11,10 @@
   "app": {
     "windows": [
       {
-        "title": "Research Companion",
+        "title": "",
         "width": 1280,
-        "height": 800
+        "height": 800,
+        "decorations": false
       }
     ],
     "security": {

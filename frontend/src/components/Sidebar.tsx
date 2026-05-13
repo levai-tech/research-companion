@@ -63,75 +63,125 @@ export default function Sidebar({
     }
   }
 
+  const initials = displayName.split(" ").map((w: string) => w[0]).join("").slice(0, 2).toUpperCase() || "?";
+
   return (
     <>
       <aside
-        className="flex flex-col h-full border-r"
-        style={{ width: 260, flexShrink: 0 }}
+        style={{ width: 260, flexShrink: 0, background: "var(--sidebar)", borderRight: "1px solid var(--border)", fontFamily: "var(--font-sans)" }}
+        className="flex flex-col h-full"
         onClick={() => footerOpen && setFooterOpen(false)}
       >
         {/* Brand */}
-        <div className="flex items-center gap-2 px-4 py-3">
-          <img src="/assets/logo-mark.png" alt="" style={{ width: 28, height: 28 }} />
-          <span className="font-light text-xl tracking-wide">Levai</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 14px 10px" }}>
+          <img src="/assets/logo-mark.png" alt="" style={{ width: 28, height: 28, objectFit: "contain" }} />
+          <span style={{ fontWeight: 200, fontSize: 20, letterSpacing: "0.04em", color: "var(--sidebar-fg)" }}>Buddy</span>
         </div>
 
         {/* Nav */}
-        <nav className="flex flex-col gap-0.5 px-2 pb-2">
+        <nav style={{ display: "flex", flexDirection: "column", gap: 2, padding: "4px 8px 8px" }}>
           <button
-            aria-current={view === "settings" ? "page" : undefined}
-            className="flex items-center gap-2 h-9 px-2.5 rounded-md text-sm font-medium text-left transition-colors hover:bg-muted data-[current]:bg-muted"
-            data-current={view === "settings" ? "" : undefined}
+            style={{
+              height: 34, padding: "0 10px", border: "none",
+              background: view === "settings" ? "var(--sidebar-active)" : "transparent",
+              color: "var(--sidebar-fg)", borderRadius: 6,
+              fontFamily: "inherit", fontSize: 13, fontWeight: 500,
+              display: "flex", alignItems: "center", gap: 10,
+              cursor: "pointer", textAlign: "left",
+              transition: "background 140ms var(--ease-out)",
+            }}
             onClick={() => onNavigate("settings")}
+            onMouseEnter={(e) => { if (view !== "settings") e.currentTarget.style.background = "var(--sidebar-hover)"; }}
+            onMouseLeave={(e) => { if (view !== "settings") e.currentTarget.style.background = "transparent"; }}
           >
-            <Settings className="h-4 w-4" />
+            <Settings size={16} />
             Settings
           </button>
           <button
-            aria-current={view === "resources" ? "page" : undefined}
-            className="flex items-center gap-2 h-9 px-2.5 rounded-md text-sm font-medium text-left transition-colors hover:bg-muted"
+            style={{
+              height: 34, padding: "0 10px", border: "none",
+              background: view === "resources" ? "var(--sidebar-active)" : "transparent",
+              color: "var(--sidebar-fg)", borderRadius: 6,
+              fontFamily: "inherit", fontSize: 13, fontWeight: 500,
+              display: "flex", alignItems: "center", gap: 10,
+              cursor: "pointer", textAlign: "left",
+              transition: "background 140ms var(--ease-out)",
+            }}
             onClick={() => onNavigate("resources")}
+            onMouseEnter={(e) => { if (view !== "resources") e.currentTarget.style.background = "var(--sidebar-hover)"; }}
+            onMouseLeave={(e) => { if (view !== "resources") e.currentTarget.style.background = "transparent"; }}
           >
-            <BookOpen className="h-4 w-4" />
+            <BookOpen size={16} />
             Resources
           </button>
           <button
-            className="flex items-center gap-2 h-9 px-2.5 rounded-md text-sm font-medium text-left transition-colors hover:bg-muted"
+            style={{
+              height: 34, padding: "0 10px", border: "none",
+              background: "transparent", color: "var(--sidebar-fg)", borderRadius: 6,
+              fontFamily: "inherit", fontSize: 13, fontWeight: 500,
+              display: "flex", alignItems: "center", gap: 10,
+              cursor: "pointer", textAlign: "left",
+              transition: "background 140ms var(--ease-out)",
+            }}
             onClick={() => onOpenSearch?.()}
+            onMouseEnter={(e) => { e.currentTarget.style.background = "var(--sidebar-hover)"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
           >
-            <Search className="h-4 w-4" />
-            <span className="flex-1">Search resources</span>
-            <span className="text-xs text-muted-foreground font-mono">⌘K</span>
+            <Search size={16} />
+            <span style={{ flex: 1, textAlign: "left" }}>Search resources</span>
+            <span style={{ fontSize: 11, color: "var(--sidebar-muted)", fontFamily: "var(--font-mono)" }}>⌘K</span>
           </button>
         </nav>
 
         {/* New project CTA */}
         <button
-          className="mx-3 mb-2 flex items-center gap-2 h-9 px-3 rounded-lg border text-sm font-medium transition-colors hover:bg-muted"
+          style={{
+            margin: "4px 12px 10px", height: 36,
+            border: "1px solid var(--border-strong)",
+            background: "var(--surface)", color: "var(--sidebar-fg)",
+            borderRadius: 8, fontFamily: "inherit", fontSize: 13, fontWeight: 500,
+            display: "flex", alignItems: "center", gap: 8,
+            cursor: "pointer", padding: "0 12px",
+            boxShadow: "var(--shadow-xs)",
+            transition: "background 140ms var(--ease-out)",
+          }}
           onClick={() => onNavigate("home")}
+          onMouseEnter={(e) => { e.currentTarget.style.background = "var(--sidebar-hover)"; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = "var(--surface)"; }}
         >
-          <FilePlus className="h-4 w-4" />
-          <span className="flex-1 text-left">New project</span>
-          <span className="text-xs text-muted-foreground font-mono">⌘N</span>
+          <FilePlus size={16} />
+          <span style={{ flex: 1, textAlign: "left" }}>New project</span>
+          <span style={{ fontSize: 11, color: "var(--sidebar-muted)", fontFamily: "var(--font-mono)" }}>⌘N</span>
         </button>
 
         {/* Project list */}
-        <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground px-4 pt-2 pb-1">
+        <div style={{ fontSize: 10, fontWeight: 600, color: "var(--sidebar-muted)", letterSpacing: "0.12em", textTransform: "uppercase", padding: "10px 16px 4px" }}>
           Projects
         </div>
-        <div className="flex-1 overflow-y-auto flex flex-col gap-px px-2">
+        <div style={{ flex: 1, overflowY: "auto", padding: "0 8px", display: "flex", flexDirection: "column", gap: 1 }}>
           {projects.map((p) => {
             const isActive = p.id === activeProjectId && view === "workspace";
             return (
               <button
                 key={p.id}
-                aria-current={isActive ? "page" : undefined}
-                className="flex items-center h-8 px-2.5 rounded-md text-sm text-left transition-colors hover:bg-muted truncate aria-[current=page]:bg-muted aria-[current=page]:font-medium"
                 title={p.title}
+                style={{
+                  height: 30, padding: "0 10px", border: "none",
+                  background: isActive ? "var(--sidebar-active)" : "transparent",
+                  color: isActive ? "var(--sidebar-fg)" : "var(--ink-700)",
+                  borderRadius: 6, fontFamily: "inherit", fontSize: 13,
+                  fontWeight: isActive ? 500 : 400,
+                  display: "flex", alignItems: "center", gap: 8,
+                  cursor: "pointer", textAlign: "left",
+                  whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                  transition: "background 140ms var(--ease-out)",
+                }}
                 onClick={() => onSelectProject(p.id)}
                 onContextMenu={(e) => handleContextMenu(e, p.id)}
+                onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = "var(--sidebar-hover)"; }}
+                onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = "transparent"; }}
               >
-                <span className="truncate">{p.title}</span>
+                <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{p.title}</span>
               </button>
             );
           })}
@@ -139,20 +189,20 @@ export default function Sidebar({
 
         {/* Footer */}
         <footer
-          role="contentinfo"
-          className="border-t px-3 py-2.5 flex items-center gap-2 cursor-pointer hover:bg-muted transition-colors"
+          style={{ borderTop: "1px solid var(--border)", padding: "10px 12px", display: "flex", alignItems: "center", gap: 10, cursor: "pointer", transition: "background 140ms var(--ease-out)" }}
           onClick={() => setFooterOpen((o) => !o)}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "var(--sidebar-hover)"; }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}
         >
           <span
             aria-label="avatar"
-            className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-semibold text-white flex-shrink-0"
-            style={{ background: "linear-gradient(135deg, #22d3ee, #1e3a5f)" }}
+            style={{ width: 26, height: 26, borderRadius: 999, background: "linear-gradient(135deg, var(--brand-cyan-400), var(--brand-navy-800))", color: "white", fontSize: 11, fontWeight: 600, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
           >
-            {displayName.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase() || "?"}
+            {initials}
           </span>
-          <div className="flex flex-col min-w-0 leading-tight">
-            <span className="text-xs font-semibold truncate">{displayName}</span>
-            <span className="text-[11px] text-muted-foreground">Free · Bring your own key</span>
+          <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.2, minWidth: 0 }}>
+            <span style={{ fontSize: 12, fontWeight: 600, color: "var(--sidebar-fg)" }}>{displayName}</span>
+            <span style={{ fontSize: 11, color: "var(--sidebar-muted)" }}>Free · Bring your own key</span>
           </div>
         </footer>
 
@@ -160,7 +210,7 @@ export default function Sidebar({
         {footerOpen && (
           <div className="absolute bottom-12 left-2 w-48 rounded-lg border bg-popover shadow-lg py-1 z-10">
             <button
-              className="w-full text-left px-3 py-2 text-sm hover:bg-muted"
+              className="w-full text-left px-3 py-2 text-sm hover:bg-surface-sunken"
               onClick={() => { setFooterOpen(false); onNavigate("account"); }}
             >
               Account
@@ -179,7 +229,7 @@ export default function Sidebar({
         >
           <button
             role="menuitem"
-            className="w-full text-left px-3 py-2 text-sm text-destructive hover:bg-muted"
+            className="w-full text-left px-3 py-2 text-sm text-signal-danger hover:bg-surface-sunken"
             onClick={() => openDeleteDialog(contextMenu.projectId)}
           >
             Delete project…
@@ -189,21 +239,21 @@ export default function Sidebar({
 
       {/* Delete confirmation dialog */}
       {deleteTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div role="dialog" className="bg-background rounded-xl border shadow-xl p-6 w-80 space-y-4">
-            <h2 className="text-sm font-semibold">Delete project?</h2>
-            <p className="text-sm text-muted-foreground">
+        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: "rgba(6, 31, 55, 0.30)", backdropFilter: "blur(4px)" }}>
+          <div role="dialog" style={{ background: "var(--surface)", borderRadius: 16, boxShadow: "var(--shadow-xl)", padding: "24px", width: 320, display: "flex", flexDirection: "column", gap: 16 }}>
+            <h2 style={{ fontSize: 15, fontWeight: 600, margin: 0, fontFamily: "var(--font-sans)" }}>Delete project?</h2>
+            <p style={{ fontSize: 13, color: "var(--foreground-muted)", margin: 0, fontFamily: "var(--font-sans)" }}>
               This action cannot be undone.
             </p>
-            <div className="flex gap-2 justify-end">
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
               <button
-                className="px-3 py-1.5 rounded-md text-sm border hover:bg-muted"
+                style={{ height: 34, padding: "0 14px", borderRadius: 8, border: "1px solid var(--border-strong)", background: "var(--surface)", color: "var(--foreground)", fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "var(--font-sans)" }}
                 onClick={() => setDeleteTarget(null)}
               >
                 Cancel
               </button>
               <button
-                className="px-3 py-1.5 rounded-md text-sm bg-destructive text-destructive-foreground hover:opacity-90"
+                style={{ height: 34, padding: "0 14px", borderRadius: 8, border: "none", background: "var(--signal-danger)", color: "var(--paper-0)", fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "var(--font-sans)" }}
                 onClick={confirmDelete}
               >
                 Delete

@@ -49,10 +49,12 @@ export default function BlockEditor({ projectId }: Props) {
   }, []);
 
   return (
-    <div className="h-full flex flex-col">
+    <div style={{ height: "100%", display: "flex", flexDirection: "column", background: "var(--background)" }}>
       <EditorRibbon editor={editor} />
-      <div className="flex-1 overflow-y-auto px-8 py-6 prose prose-neutral max-w-4xl mx-auto">
-        <EditorContent editor={editor} />
+      <div style={{ flex: 1, overflowY: "auto", padding: "32px 0" }}>
+        <article className="prose" style={{ fontFamily: "var(--font-serif)", maxWidth: 680, margin: "0 auto", padding: "0 24px", color: "var(--foreground)", fontSize: 17, lineHeight: 1.7 }}>
+          <EditorContent editor={editor} />
+        </article>
       </div>
     </div>
   );

@@ -16,6 +16,13 @@ interface OutlineGeneratorProps {
   onComplete: () => void;
 }
 
+const primaryBtn: React.CSSProperties = {
+  height: 34, padding: "0 14px", borderRadius: 8, border: "none",
+  background: "var(--brand-navy-800)", color: "var(--paper-0)",
+  fontFamily: "var(--font-sans)", fontSize: 13, fontWeight: 500, cursor: "pointer",
+  transition: "background 140ms var(--ease-out)",
+};
+
 export default function OutlineGenerator({ projectId, onComplete }: OutlineGeneratorProps) {
   const port = useAppStore((s) => s.backendPort);
   const [outline, setOutline] = useState<SavedOutline | null>(null);
@@ -45,35 +52,48 @@ export default function OutlineGenerator({ projectId, onComplete }: OutlineGener
 
   if (outline) {
     return (
-      <div className="flex flex-col gap-4 p-6">
-        <h2 className="text-lg font-semibold">Your Outline</h2>
-        <ol className="flex flex-col gap-3">
+      <div style={{ padding: 24, maxWidth: 800, margin: "0 auto", display: "flex", flexDirection: "column", gap: 16 }}>
+        <h2 style={{ fontFamily: "var(--font-sans)", fontSize: 20, fontWeight: 600, letterSpacing: "-0.012em", margin: 0 }}>Your Outline</h2>
+        <ol style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: 12 }}>
           {outline.sections.map((section, i) => (
-            <li key={i} className="rounded border p-4">
-              <p className="font-semibold">{section.title}</p>
-              <p className="text-sm">{section.description}</p>
-              {section.subsections.length > 0 && (
-                <ul className="ml-4 mt-2 flex flex-col gap-1">
-                  {section.subsections.map((sub, j) => (
-                    <li key={j}>
-                      <span className="font-medium">{sub.title}</span>
-                      {sub.description && <span className="text-sm"> — {sub.description}</span>}
-                    </li>
-                  ))}
-                </ul>
-              )}
+            <li key={i} style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12, padding: "14px 18px", boxShadow: "var(--shadow-xs)" }}>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
+                <span style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--foreground-muted)", minWidth: 24 }}>{i + 1}.</span>
+                <div style={{ flex: 1 }}>
+                  <p style={{ fontFamily: "var(--font-sans)", fontSize: 14, fontWeight: 600, color: "var(--foreground)", margin: "0 0 4px" }}>{section.title}</p>
+                  <p style={{ fontFamily: "var(--font-sans)", fontSize: 13, lineHeight: 1.55, color: "var(--foreground-muted)", margin: 0 }}>{section.description}</p>
+                  {section.subsections.length > 0 && (
+                    <ul style={{ marginTop: 8, paddingLeft: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 4 }}>
+                      {section.subsections.map((sub, j) => (
+                        <li key={j} style={{ fontFamily: "var(--font-sans)", fontSize: 12, color: "var(--foreground)", paddingLeft: 12, borderLeft: "1px solid var(--border)" }}>
+                          <span style={{ fontWeight: 600, color: "var(--ink-700)" }}>{sub.title}</span>
+                          {sub.description && <span style={{ color: "var(--foreground-muted)" }}> — {sub.description}</span>}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </div>
             </li>
           ))}
         </ol>
-        <button onClick={onComplete}>Done</button>
+        <div style={{ display: "flex", justifyContent: "flex-end" }}>
+          <button style={primaryBtn} onClick={onComplete}>Done</button>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col gap-4 p-6">
-      {error && <p className="text-destructive text-sm">{error}</p>}
-      <button onClick={handleGenerate} disabled={isGenerating}>
+    <div style={{ padding: 24, maxWidth: 800, margin: "0 auto", display: "flex", flexDirection: "column", gap: 16 }}>
+      {error && (
+        <p style={{ fontFamily: "var(--font-sans)", fontSize: 13, color: "var(--signal-danger)", margin: 0 }}>{error}</p>
+      )}
+      <button
+        style={{ ...primaryBtn, opacity: isGenerating ? 0.6 : 1, cursor: isGenerating ? "default" : "pointer", alignSelf: "flex-start" }}
+        onClick={handleGenerate}
+        disabled={isGenerating}
+      >
         {isGenerating ? "Generating…" : "Generate Outline"}
       </button>
     </div>

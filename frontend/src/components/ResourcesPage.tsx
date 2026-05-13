@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useAppStore } from "../store";
 import { useProjects } from "../hooks/useProjects";
 import { useJobTrayStore } from "../jobTrayStore";
+import { FileText, Plus } from "lucide-react";
 import StatusPill from "./StatusPill";
 import AddResourceModal from "./AddResourceModal";
 
@@ -75,102 +76,109 @@ export default function ResourcesPage({ initialFilterId }: Props) {
     setModalOpen(false);
   }
 
+  const filterChipStyle = (active: boolean): React.CSSProperties => ({
+    fontFamily: "var(--font-sans)", fontSize: 12, fontWeight: 500,
+    padding: "4px 10px", borderRadius: 999,
+    border: active ? "1px solid var(--brand-navy-800)" : "1px solid var(--border-strong)",
+    background: active ? "var(--brand-navy-800)" : "var(--surface)",
+    color: active ? "var(--paper-0)" : "var(--foreground)",
+    cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 5,
+    transition: "background 140ms var(--ease-out), border-color 140ms var(--ease-out)",
+  });
+
   return (
-    <div className="h-full overflow-y-auto">
-      <div className="max-w-4xl mx-auto px-8 py-8 pb-16">
-        <div className="flex items-end gap-3 mb-1.5">
-          <h1 className="text-2xl font-semibold tracking-tight">Resources</h1>
-          <span className="text-xs font-mono text-muted-foreground pb-1.5">
+    <div style={{ height: "100%", overflowY: "auto", background: "var(--background)" }}>
+      <div style={{ maxWidth: 960, margin: "0 auto", padding: "32px 32px 60px" }}>
+        {/* Header */}
+        <div style={{ display: "flex", alignItems: "flex-end", gap: 14, marginBottom: 6 }}>
+          <h1 style={{ fontFamily: "var(--font-sans)", fontSize: 28, fontWeight: 600, letterSpacing: "-0.012em", margin: 0 }}>Resources</h1>
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--foreground-muted)", paddingBottom: 6 }}>
             {resources.length} indexed across {projectsWithResources.length} projects
           </span>
         </div>
-        <p className="text-sm text-muted-foreground mb-6 max-w-lg">
+        <p style={{ fontFamily: "var(--font-sans)", fontSize: 14, lineHeight: 1.55, color: "var(--foreground-muted)", margin: "0 0 24px", maxWidth: 580 }}>
           Everything Buddy can cite. Add a file or URL and it&apos;s indexed semantically — searchable from anywhere via ⌘K.
         </p>
 
-        <div className="flex flex-wrap gap-2 items-center mb-5">
-          <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">
-            Project
-          </span>
-          <button
-            className={`text-xs px-3 py-1 rounded-full border transition-colors ${
-              filterId === "all"
-                ? "bg-navy-800 text-white border-navy-800 font-medium"
-                : "bg-background text-foreground border-border hover:bg-muted"
-            }`}
-            aria-pressed={filterId === "all"}
-            onClick={() => setFilterId("all")}
-          >
-            All · <span className="font-mono opacity-70">{resources.length}</span>
+        {/* Toolbar */}
+        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 18 }}>
+          <span style={{ fontSize: 10, fontWeight: 600, color: "var(--foreground-muted)", letterSpacing: "0.12em", textTransform: "uppercase", marginRight: 4 }}>Project</span>
+          <button style={filterChipStyle(filterId === "all")} onClick={() => setFilterId("all")}>
+            All · <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, opacity: 0.7 }}>{resources.length}</span>
           </button>
           {projectsWithResources.map((p) => {
             const count = resources.filter((r) => r.project_ids.includes(p.id)).length;
             return (
-              <button
-                key={p.id}
-                className={`text-xs px-3 py-1 rounded-full border transition-colors ${
-                  filterId === p.id
-                    ? "bg-navy-800 text-white border-navy-800 font-medium"
-                    : "bg-background text-foreground border-border hover:bg-muted"
-                }`}
-                aria-pressed={filterId === p.id}
-                onClick={() => setFilterId(p.id)}
-              >
-                {p.title} · <span className="font-mono opacity-70">{count}</span>
+              <button key={p.id} style={filterChipStyle(filterId === p.id)} onClick={() => setFilterId(p.id)}>
+                {p.title} · <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, opacity: 0.7 }}>{count}</span>
               </button>
             );
           })}
-          <div className="ml-auto">
+          <div style={{ marginLeft: "auto" }}>
             <button
-              className="text-sm px-3 py-1.5 rounded bg-primary text-primary-foreground"
+              style={{ height: 34, padding: "0 14px", borderRadius: 8, border: "none", background: "var(--brand-navy-800)", color: "var(--paper-0)", fontFamily: "var(--font-sans)", fontSize: 13, fontWeight: 500, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6, transition: "background 140ms var(--ease-out)" }}
               onClick={() => setModalOpen(true)}
+              onMouseEnter={(e) => { e.currentTarget.style.background = "var(--brand-navy-700)"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = "var(--brand-navy-800)"; }}
             >
+              <Plus size={14} />
               Add resource
             </button>
           </div>
         </div>
 
-        <div className="border rounded-lg overflow-hidden">
+        {/* Table */}
+        <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12, overflow: "hidden", boxShadow: "var(--shadow-xs)" }}>
           {filtered.length === 0 ? (
-            <p className="text-sm text-muted-foreground p-6">No resources in this scope yet.</p>
+            <div style={{ padding: "48px 24px", textAlign: "center", fontFamily: "var(--font-sans)", fontSize: 14, color: "var(--foreground-muted)" }}>
+              No resources in this scope yet.
+            </div>
           ) : (
-            filtered.map((r) => {
+            filtered.map((r, i) => {
               const title = r.citation_metadata?.title ?? "(untitled)";
               const rowProjects = projects.filter((p) => r.project_ids.includes(p.id));
               return (
                 <div
                   key={r.id}
-                  className="flex items-center gap-3 px-4 py-3 border-b last:border-b-0 hover:bg-muted/50 transition-colors"
+                  style={{ display: "flex", alignItems: "center", gap: 14, padding: "12px 16px", borderBottom: i === filtered.length - 1 ? "none" : "1px solid var(--border)", transition: "background 140ms var(--ease-out)" }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(0,0,0,0.025)"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
                 >
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{title}</p>
-                    <div className="flex flex-wrap gap-1 mt-0.5 items-center">
+                  <div style={{ width: 36, height: 36, borderRadius: 8, background: "var(--surface-sunken)", color: "var(--foreground-muted)", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    <FileText size={18} />
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ fontFamily: "var(--font-sans)", fontSize: 14, fontWeight: 600, color: "var(--foreground)", margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{title}</p>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 2, alignItems: "center" }}>
                       {rowProjects.map((p) => (
-                        <span
-                          key={p.id}
-                          className="text-xs px-1.5 py-0 rounded bg-muted text-muted-foreground"
-                        >
+                        <span key={p.id} style={{ fontFamily: "var(--font-sans)", fontSize: 10, fontWeight: 500, color: "var(--foreground-muted)", background: "var(--surface-sunken)", padding: "1px 7px", borderRadius: 999 }}>
                           {p.title}
                         </span>
                       ))}
-                      <span className="text-xs text-muted-foreground">{r.resource_type}</span>
+                      <span style={{ fontFamily: "var(--font-sans)", fontSize: 12, color: "var(--foreground-muted)" }}>{r.resource_type}</span>
                     </div>
                   </div>
                   <StatusPill status={r.indexing_status} />
-                  <button
-                    aria-label="Re-index"
-                    className="text-sm text-muted-foreground hover:text-foreground p-1 rounded hover:bg-muted"
-                    onClick={() => handleReindex(r.id)}
-                  >
-                    ↻
-                  </button>
-                  <button
-                    aria-label="Delete"
-                    className="text-sm text-muted-foreground hover:text-destructive p-1 rounded hover:bg-destructive/10"
-                    onClick={() => handleDelete(r.id)}
-                  >
-                    ✕
-                  </button>
+                  <div style={{ display: "flex", gap: 4, alignItems: "center", flexShrink: 0 }}>
+                    <button
+                      aria-label="Re-index"
+                      style={{ width: 30, height: 30, border: "none", background: "transparent", borderRadius: 6, color: "var(--foreground-muted)", cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 16, transition: "background 140ms var(--ease-out), color 140ms var(--ease-out)" }}
+                      onClick={() => handleReindex(r.id)}
+                      onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(0,0,0,0.05)"; e.currentTarget.style.color = "var(--foreground)"; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--foreground-muted)"; }}
+                    >
+                      ↻
+                    </button>
+                    <button
+                      aria-label="Delete"
+                      style={{ width: 30, height: 30, border: "none", background: "transparent", borderRadius: 6, color: "var(--foreground-muted)", cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 13, transition: "background 140ms var(--ease-out), color 140ms var(--ease-out)" }}
+                      onClick={() => handleDelete(r.id)}
+                      onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(192,57,43,0.10)"; e.currentTarget.style.color = "var(--signal-danger)"; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--foreground-muted)"; }}
+                    >
+                      ✕
+                    </button>
+                  </div>
                 </div>
               );
             })
@@ -182,7 +190,7 @@ export default function ResourcesPage({ initialFilterId }: Props) {
         <AddResourceModal
           projectId={filterId !== "all" ? filterId : ""}
           onClose={() => setModalOpen(false)}
-          onResourceAdded={(resource) => handleResourceAdded(resource as Resource)}
+          onResourceAdded={(resource) => handleResourceAdded(resource as unknown as Resource)}
         />
       )}
     </div>

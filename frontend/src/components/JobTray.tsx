@@ -146,89 +146,67 @@ export default function JobTray({ projectId }: Props) {
 
   return (
     <div
-      className="border-t bg-muted/30 px-4 py-3 flex flex-col gap-2"
+      style={{ borderTop: "1px solid var(--border)", background: "var(--surface-sunken)", padding: "10px 16px", display: "flex", flexDirection: "column", gap: 8 }}
       role="region"
       aria-label="Indexing jobs"
     >
       {visibleJobs.map((job) => (
-        <div key={job.resourceId} className="flex items-center gap-3">
+        <div key={job.resourceId} style={{ display: "flex", alignItems: "center", gap: 10 }}>
           {(job.status === "queued" || job.status === "indexing") && (
-            <span
-              className="animate-spin inline-block text-sm"
-              aria-label="indexing"
-            >
-              ⟳
-            </span>
+            <span className="animate-spin" style={{ fontSize: 14, color: "var(--brand-cyan-500)", lineHeight: 1 }} aria-label="indexing">⟳</span>
           )}
           {job.status === "ready" && (
-            <span className="text-green-600 text-sm" aria-label="complete">
-              ✓
-            </span>
+            <span style={{ fontSize: 13, color: "var(--signal-success)" }} aria-label="complete">✓</span>
           )}
           {job.status === "failed" && (
-            <span className="text-red-600 text-sm" aria-label="failed">
-              ✗
-            </span>
+            <span style={{ fontSize: 13, color: "var(--signal-danger)" }} aria-label="failed">✗</span>
           )}
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium truncate">{job.title}</p>
-            {(job.status === "queued" || job.status === "indexing") &&
-              job.currentStep && (
-                <p
-                  data-testid="step-label"
-                  className="text-xs text-muted-foreground"
-                >
-                  {stepLabel(job.currentStep, job.chunksDone, job.chunksTotal)}
-                </p>
-              )}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <p style={{ fontFamily: "var(--font-sans)", fontSize: 13, fontWeight: 500, color: "var(--foreground)", margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{job.title}</p>
+            {(job.status === "queued" || job.status === "indexing") && job.currentStep && (
+              <p data-testid="step-label" style={{ fontFamily: "var(--font-sans)", fontSize: 11, color: "var(--foreground-muted)", margin: "1px 0 0" }}>
+                {stepLabel(job.currentStep, job.chunksDone, job.chunksTotal)}
+              </p>
+            )}
             {(job.status === "queued" || job.status === "indexing") && (
               <progress
-                aria-valuenow={job.chunksDone}
-                aria-valuemin={0}
+                aria-valuenow={job.chunksDone} aria-valuemin={0}
                 aria-valuemax={job.chunksTotal || 100}
-                value={job.chunksDone}
-                max={job.chunksTotal || 100}
-                className="w-full h-1"
+                value={job.chunksDone} max={job.chunksTotal || 100}
+                style={{ width: "100%", height: 2, marginTop: 3 }}
               />
             )}
             {job.status === "failed" && job.errorMessage && (
-              <p className="text-xs text-red-600">{job.errorMessage}</p>
+              <p style={{ fontFamily: "var(--font-sans)", fontSize: 11, color: "var(--signal-danger)", margin: "1px 0 0" }}>{job.errorMessage}</p>
             )}
-            {job.batchesTotal > 0 &&
-              job.batchesFallback / job.batchesTotal > 0.25 && (
-                <p className="text-xs text-amber-600">
-                  {job.batchesFallback} of {job.batchesTotal} batches used recursive fallback
-                </p>
-              )}
+            {job.batchesTotal > 0 && job.batchesFallback / job.batchesTotal > 0.25 && (
+              <p style={{ fontFamily: "var(--font-sans)", fontSize: 11, color: "var(--signal-warning)", margin: "1px 0 0" }}>
+                {job.batchesFallback} of {job.batchesTotal} batches used recursive fallback
+              </p>
+            )}
           </div>
           {job.status === "failed" && (
             <button
-              className="text-xs text-muted-foreground hover:text-foreground"
+              style={{ fontFamily: "var(--font-sans)", fontSize: 11, color: "var(--foreground-muted)", background: "transparent", border: "none", cursor: "pointer", padding: "2px 6px" }}
               onClick={() => dismissJob(job.resourceId)}
             >
               Dismiss
             </button>
           )}
-          {job.batchesTotal > 0 &&
-            job.batchesFallback / job.batchesTotal > 0.25 && (
-              <button
-                className="text-xs text-amber-700 hover:text-amber-900"
-                onClick={() =>
-                  fetch(
-                    `http://127.0.0.1:${port}/resources/${job.resourceId}/reingest`,
-                    {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ mode: "recursive" }),
-                    },
-                  ).then(() => {
-                    updateJob(job.resourceId, { status: "queued", batchesTotal: 0, batchesFallback: 0 });
-                  })
-                }
-              >
-                Re-ingest with recursive chunker
-              </button>
-            )}
+          {job.batchesTotal > 0 && job.batchesFallback / job.batchesTotal > 0.25 && (
+            <button
+              style={{ fontFamily: "var(--font-sans)", fontSize: 11, color: "var(--signal-warning)", background: "transparent", border: "none", cursor: "pointer", padding: "2px 6px" }}
+              onClick={() =>
+                fetch(`http://127.0.0.1:${port}/resources/${job.resourceId}/reingest`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ mode: "recursive" }),
+                }).then(() => { updateJob(job.resourceId, { status: "queued", batchesTotal: 0, batchesFallback: 0 }); })
+              }
+            >
+              Re-ingest with recursive chunker
+            </button>
+          )}
         </div>
       ))}
     </div>

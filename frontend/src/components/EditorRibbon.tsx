@@ -5,30 +5,24 @@ interface Props {
   editor: Editor | null;
 }
 
-function Btn({
-  label,
-  active,
-  onActivate,
-  children,
-}: {
-  label: string;
-  active: boolean;
-  onActivate: () => void;
-  children: React.ReactNode;
+const btnBase: React.CSSProperties = {
+  width: 28, height: 28, border: "none", borderRadius: 4,
+  fontFamily: "var(--font-sans)", fontSize: 13, fontWeight: 600,
+  cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center",
+  transition: "background 140ms var(--ease-out), color 140ms var(--ease-out)",
+};
+
+function Btn({ label, active, onActivate, children }: {
+  label: string; active: boolean; onActivate: () => void; children: React.ReactNode;
 }) {
   return (
     <button
       aria-label={label}
       aria-pressed={active}
-      onMouseDown={(e) => {
-        e.preventDefault();
-        onActivate();
-      }}
-      className={`flex items-center justify-center h-7 min-w-[28px] px-1.5 rounded text-sm select-none transition-colors ${
-        active
-          ? "bg-neutral-900 text-white"
-          : "text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900"
-      }`}
+      onMouseDown={(e) => { e.preventDefault(); onActivate(); }}
+      style={{ ...btnBase, background: active ? "var(--brand-navy-800)" : "transparent", color: active ? "var(--paper-0)" : "var(--foreground-muted)" }}
+      onMouseEnter={(e) => { if (!active) e.currentTarget.style.background = "var(--surface-sunken)"; if (!active) e.currentTarget.style.color = "var(--foreground)"; }}
+      onMouseLeave={(e) => { if (!active) e.currentTarget.style.background = "transparent"; if (!active) e.currentTarget.style.color = "var(--foreground-muted)"; }}
     >
       {children}
     </button>
@@ -36,7 +30,7 @@ function Btn({
 }
 
 function Sep() {
-  return <span className="w-px h-5 bg-neutral-200 mx-1" />;
+  return <span style={{ width: 1, height: 16, background: "var(--border)", margin: "0 4px", display: "inline-block" }} />;
 }
 
 function BulletListIcon() {
@@ -82,30 +76,30 @@ function RibbonContent({ editor }: { editor: Editor }) {
     });
 
   return (
-    <div className="sticky top-0 z-10 flex items-center gap-0.5 px-3 py-1.5 border-b border-neutral-200 bg-white shrink-0">
+    <div style={{ position: "sticky", top: 0, zIndex: 10, display: "flex", alignItems: "center", gap: 2, padding: "6px 12px", borderBottom: "1px solid var(--border)", background: "var(--surface)", flexShrink: 0 }}>
       <Btn label="Normal text" active={isPara} onActivate={() => editor.commands.setParagraph()}>
-        <span className="text-xs leading-none">¶</span>
+        <span style={{ fontSize: 12, lineHeight: 1 }}>¶</span>
       </Btn>
 
       <Sep />
 
       <Btn label="H1" active={isH1} onActivate={() => editor.commands.toggleHeading({ level: 1 })}>
-        <span className="font-mono font-bold text-xs leading-none">H1</span>
+        <span style={{ fontFamily: "var(--font-mono)", fontWeight: 700, fontSize: 11, lineHeight: 1 }}>H1</span>
       </Btn>
       <Btn label="H2" active={isH2} onActivate={() => editor.commands.toggleHeading({ level: 2 })}>
-        <span className="font-mono font-bold text-xs leading-none">H2</span>
+        <span style={{ fontFamily: "var(--font-mono)", fontWeight: 700, fontSize: 11, lineHeight: 1 }}>H2</span>
       </Btn>
       <Btn label="H3" active={isH3} onActivate={() => editor.commands.toggleHeading({ level: 3 })}>
-        <span className="font-mono font-bold text-xs leading-none">H3</span>
+        <span style={{ fontFamily: "var(--font-mono)", fontWeight: 700, fontSize: 11, lineHeight: 1 }}>H3</span>
       </Btn>
 
       <Sep />
 
       <Btn label="Bold" active={isBold} onActivate={() => editor.commands.toggleBold()}>
-        <span className="font-serif font-black text-sm leading-none">B</span>
+        <span style={{ fontFamily: "var(--font-serif)", fontWeight: 900, fontSize: 14, lineHeight: 1 }}>B</span>
       </Btn>
       <Btn label="Italic" active={isItalic} onActivate={() => editor.commands.toggleItalic()}>
-        <span className="font-serif italic font-bold text-sm leading-none">I</span>
+        <span style={{ fontFamily: "var(--font-serif)", fontStyle: "italic", fontWeight: 700, fontSize: 14, lineHeight: 1 }}>I</span>
       </Btn>
 
       <Sep />
@@ -116,6 +110,9 @@ function RibbonContent({ editor }: { editor: Editor }) {
       <Btn label="Numbered List" active={isOrdered} onActivate={() => editor.commands.toggleOrderedList()}>
         <NumberedListIcon />
       </Btn>
+
+      <span style={{ flex: 1 }} />
+      <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--foreground-muted)" }}>saved</span>
     </div>
   );
 }

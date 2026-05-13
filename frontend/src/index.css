@@ -1,20 +1,60 @@
-@import "./styles/tokens.css";
+@import "./styles/colors_and_type.css";
 @import "tailwindcss";
 @plugin "@tailwindcss/typography";
 
 @theme {
+  /* ── Brand palette ─────────────────────────────────────────── */
   --color-brand-cyan-400: var(--brand-cyan-400);
   --color-brand-cyan-500: var(--brand-cyan-500);
   --color-brand-cyan-600: var(--brand-cyan-600);
   --color-brand-navy-700: var(--brand-navy-700);
   --color-brand-navy-800: var(--brand-navy-800);
-  --color-background:     var(--background);
-  --color-surface:        var(--surface);
-  --color-foreground:     var(--foreground);
-  --color-sidebar:        var(--sidebar);
-  --font-family-sans:     var(--font-sans);
-  --font-family-mono:     var(--font-mono);
-  --font-family-serif:    var(--font-serif);
+
+  /* ── Semantic surfaces ─────────────────────────────────────── */
+  --color-background:        var(--background);
+  --color-surface:           var(--surface);
+  --color-surface-sunken:    var(--surface-sunken);
+  --color-surface-raised:    var(--surface-raised);
+  --color-sidebar:           var(--sidebar);
+  --color-sidebar-hover:     var(--sidebar-hover);
+  --color-sidebar-active:    var(--sidebar-active);
+  --color-sidebar-fg:        var(--sidebar-fg);
+  --color-sidebar-muted:     var(--sidebar-muted);
+
+  /* ── Foreground / text ─────────────────────────────────────── */
+  --color-foreground:        var(--foreground);
+  --color-foreground-muted:  var(--foreground-muted);
+  --color-foreground-subtle: var(--foreground-subtle);
+  --color-ink-700:           var(--ink-700);
+  --color-paper-0:           var(--paper-0);
+
+  /* ── Borders ───────────────────────────────────────────────── */
+  --color-border:            var(--border);
+  --color-border-strong:     var(--border-strong);
+
+  /* ── Signals ───────────────────────────────────────────────── */
+  --color-signal-success:    var(--signal-success);
+  --color-signal-warning:    var(--signal-warning);
+  --color-signal-danger:     var(--signal-danger);
+
+  /* ── shadcn-compat aliases ─────────────────────────────────── */
+  --color-primary:                var(--brand-navy-800);
+  --color-primary-foreground:     var(--paper-0);
+  --color-muted:                  var(--muted);
+  --color-muted-foreground:       var(--muted-foreground);
+  --color-accent:                 var(--accent);
+  --color-accent-foreground:      var(--accent-foreground);
+  --color-destructive:            var(--signal-danger);
+  --color-destructive-foreground: var(--paper-0);
+  --color-popover:                var(--surface);
+  --color-popover-foreground:     var(--foreground);
+  --color-input:                  var(--border-strong);
+  --color-ring:                   var(--ring);
+
+  /* ── Typography ────────────────────────────────────────────── */
+  --font-family-sans:   var(--font-sans);
+  --font-family-mono:   var(--font-mono);
+  --font-family-serif:  var(--font-serif);
 }
 
 /* TipTap editor: reset Tailwind's preflight within the prose editor so headings

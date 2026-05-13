@@ -293,7 +293,7 @@ def create_app(settings_path: Path | None = None, projects_dir: Path | None = No
         return status
 
     @app.post("/resources/{resource_id}/reingest", status_code=202)
-    async def reingest_resource(resource_id: str, body: dict):
+    async def reingest_resource(resource_id: str):
         resource = resource_store.get(resource_id)
         if resource is None:
             raise HTTPException(status_code=404, detail="Resource not found")

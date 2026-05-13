@@ -1,0 +1,294 @@
+/* =====================================================================
+   Levai Design System — core tokens
+   --------------------------------------------------------------------
+   Used by the Buddy app (AI writing helper) and any marketing/slide
+   surfaces. Tokens follow a shadcn/Tailwind v4 shape so they drop
+   straight into the existing `frontend/` codebase.
+   ===================================================================== */
+
+/* -------- Webfonts -------------------------------------------------- */
+@import url("https://fonts.googleapis.com/css2?family=Manrope:wght@200;300;400;500;600;700;800&family=Source+Serif+4:ital,opsz,wght@0,8..60,300..700;1,8..60,300..700&family=JetBrains+Mono:wght@400;500;600&display=swap");
+
+:root {
+  /* ===== Brand palette =========================================== */
+  /* Pulled from the logo ribbon: cyan highlight → mid steel → navy. */
+  --brand-cyan-50:  #e8f7fd;
+  --brand-cyan-100: #c6ecfa;
+  --brand-cyan-200: #8edaf4;
+  --brand-cyan-300: #4ec4eb;
+  --brand-cyan-400: #1fb6e8;   /* primary highlight, used on dark */
+  --brand-cyan-500: #0b9ed1;   /* primary action on light surfaces */
+  --brand-cyan-600: #0b80ac;
+  --brand-cyan-700: #0e6688;
+  --brand-cyan-800: #114f6a;
+  --brand-cyan-900: #0e3a4e;
+
+  --brand-navy-50:  #eef3f9;
+  --brand-navy-100: #d4dfeb;
+  --brand-navy-200: #a4bcd5;
+  --brand-navy-300: #6f95b8;
+  --brand-navy-400: #3f6e95;
+  --brand-navy-500: #1f4f78;
+  --brand-navy-600: #143d60;
+  --brand-navy-700: #0c2d4b;
+  --brand-navy-800: #061f37;   /* primary deep navy */
+  --brand-navy-900: #031428;   /* shadow accent */
+
+  /* Steel — a desaturated mid-blue used for chrome and rails. */
+  --brand-steel-100: #e8edf2;
+  --brand-steel-200: #ccd6e0;
+  --brand-steel-300: #a7b6c4;
+  --brand-steel-400: #7d8f9f;
+  --brand-steel-500: #56697a;
+  --brand-steel-600: #3d4f60;
+
+  /* Warm off-whites — Levai pages are NOT pure white; they sit on a
+     slightly-warm paper tone so the cyan reads as cool. */
+  --paper-0:   #ffffff;
+  --paper-50:  #fafaf8;        /* app surface */
+  --paper-100: #f4f3ef;        /* sidebar surface, light mode */
+  --paper-200: #e9e7e0;        /* dividers */
+  --paper-300: #d6d3ca;
+  --ink-900:   #11161c;        /* body text */
+  --ink-700:   #2a323c;
+  --ink-500:   #5a6573;        /* muted text */
+  --ink-400:   #8693a3;        /* placeholders, hints */
+  --ink-300:   #b8c0cb;        /* disabled */
+
+  /* Semantic accents (tertiary — keep usage rare). */
+  --signal-success: #1f8a5b;
+  --signal-warning: #c98410;
+  --signal-danger:  #c0392b;
+  --signal-info:    var(--brand-cyan-500);
+
+  /* ===== Semantic surface tokens ================================== */
+  --background:        var(--paper-50);
+  --surface:           var(--paper-0);
+  --surface-sunken:    var(--paper-100);
+  --surface-raised:    var(--paper-0);
+  --sidebar:           var(--paper-100);
+  --sidebar-fg:        var(--ink-900);
+  --sidebar-muted:     var(--ink-500);
+  --sidebar-hover:     #ece9e1;
+  --sidebar-active:    #e3dfd4;
+  --foreground:        var(--ink-900);
+  --foreground-muted:  var(--ink-500);
+  --foreground-subtle: var(--ink-400);
+  --border:            var(--paper-200);
+  --border-strong:     var(--paper-300);
+  --ring:              var(--brand-cyan-500);
+
+  /* Primary / accent semantic */
+  --primary:           var(--brand-navy-800);
+  --primary-foreground: var(--paper-0);
+  --accent:            var(--brand-cyan-500);
+  --accent-foreground: var(--paper-0);
+  --muted:             var(--paper-100);
+  --muted-foreground:  var(--ink-500);
+
+  /* ===== Typography =============================================== */
+  /* Manrope is a placeholder for Levai's UI sans — modern, geometric,
+     friendly. The wordmark uses a thin geometric sans which Manrope
+     200/300 approximates well. */
+  --font-sans:    "Manrope", ui-sans-serif, system-ui, sans-serif;
+  /* Source Serif 4 is the writing surface — optical-sized, calm, with
+     a humanist counter that reads well at body length. */
+  --font-serif:   "Source Serif 4", ui-serif, Georgia, serif;
+  --font-mono:    "JetBrains Mono", ui-monospace, "SF Mono", monospace;
+  --font-display: var(--font-sans);
+
+  /* Type scale — major-second on body, third-rooted on display. */
+  --fs-2xs:  11px;
+  --fs-xs:   12px;
+  --fs-sm:   13px;
+  --fs-base: 14px;
+  --fs-md:   15px;
+  --fs-lg:   17px;
+  --fs-xl:   20px;
+  --fs-2xl:  24px;
+  --fs-3xl:  30px;
+  --fs-4xl:  38px;
+  --fs-5xl:  48px;
+  --fs-6xl:  64px;
+
+  --lh-tight:   1.15;
+  --lh-snug:    1.3;
+  --lh-normal:  1.45;
+  --lh-relaxed: 1.6;
+  --lh-prose:   1.7;
+
+  --tracking-tight: -0.02em;
+  --tracking-snug:  -0.012em;
+  --tracking-flat:   0em;
+  --tracking-wide:   0.04em;
+  --tracking-eyebrow:0.12em;
+
+  /* ===== Spacing ================================================== */
+  --s-0:   0px;
+  --s-px:  1px;
+  --s-0_5: 2px;
+  --s-1:   4px;
+  --s-1_5: 6px;
+  --s-2:   8px;
+  --s-2_5: 10px;
+  --s-3:   12px;
+  --s-4:   16px;
+  --s-5:   20px;
+  --s-6:   24px;
+  --s-8:   32px;
+  --s-10:  40px;
+  --s-12:  48px;
+  --s-16:  64px;
+  --s-20:  80px;
+  --s-24:  96px;
+
+  /* ===== Radii ==================================================== */
+  --r-xs:  4px;
+  --r-sm:  6px;
+  --r-md:  8px;
+  --r-lg:  12px;
+  --r-xl:  16px;
+  --r-2xl: 22px;     /* used on the composer */
+  --r-pill: 999px;
+
+  /* ===== Shadows ================================================== */
+  /* Levai shadows are SOFT and NAVY-TINTED, not neutral grey. They
+     lean cool, mirroring the logo's deep navy. */
+  --shadow-xs:   0 1px 1px rgba(6, 31, 55, 0.04);
+  --shadow-sm:   0 1px 2px rgba(6, 31, 55, 0.06), 0 1px 2px rgba(6, 31, 55, 0.04);
+  --shadow-md:   0 4px 14px -4px rgba(6, 31, 55, 0.10), 0 2px 4px -2px rgba(6, 31, 55, 0.06);
+  --shadow-lg:   0 14px 32px -10px rgba(6, 31, 55, 0.18), 0 4px 10px -4px rgba(6, 31, 55, 0.08);
+  --shadow-xl:   0 28px 50px -20px rgba(6, 31, 55, 0.28), 0 10px 18px -8px rgba(6, 31, 55, 0.12);
+  --shadow-inset:inset 0 0 0 1px rgba(6, 31, 55, 0.06);
+  --shadow-focus:0 0 0 3px rgba(11, 158, 209, 0.30);
+  --shadow-glow: 0 0 0 1px rgba(11, 158, 209, 0.35), 0 6px 22px -6px rgba(11, 158, 209, 0.45);
+
+  /* ===== Motion =================================================== */
+  --ease-out:    cubic-bezier(0.16, 1, 0.3, 1);     /* primary */
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1); /* rare, micro only */
+  --dur-1: 80ms;
+  --dur-2: 140ms;
+  --dur-3: 220ms;
+  --dur-4: 360ms;
+  --dur-5: 600ms;
+}
+
+/* -------- Dark mode (used by slides + future dark surfaces) -------- */
+:root[data-theme="dark"] {
+  --background:        var(--brand-navy-900);
+  --surface:           #07182c;
+  --surface-sunken:    #04101f;
+  --surface-raised:    #0b223b;
+  --sidebar:           #07182c;
+  --sidebar-fg:        var(--paper-50);
+  --sidebar-muted:     #8aa0b8;
+  --sidebar-hover:     #0d2540;
+  --sidebar-active:    #133353;
+  --foreground:        var(--paper-50);
+  --foreground-muted:  #98a8b9;
+  --foreground-subtle: #6b7d92;
+  --border:            #143052;
+  --border-strong:     #1f4774;
+  --primary:           var(--brand-cyan-400);
+  --primary-foreground:var(--brand-navy-900);
+  --accent:            var(--brand-cyan-400);
+  --accent-foreground: var(--brand-navy-900);
+  --muted:             #0d2540;
+  --muted-foreground:  #98a8b9;
+}
+
+/* =====================================================================
+   Semantic element styles — drop-in defaults that match the system.
+   ===================================================================== */
+html, body {
+  font-family: var(--font-sans);
+  font-size: var(--fs-base);
+  line-height: var(--lh-normal);
+  color: var(--foreground);
+  background: var(--background);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+h1, .h1 {
+  font-family: var(--font-display);
+  font-size: var(--fs-4xl);
+  line-height: var(--lh-tight);
+  letter-spacing: var(--tracking-tight);
+  font-weight: 600;
+  color: var(--foreground);
+}
+h2, .h2 {
+  font-family: var(--font-display);
+  font-size: var(--fs-2xl);
+  line-height: var(--lh-snug);
+  letter-spacing: var(--tracking-snug);
+  font-weight: 600;
+}
+h3, .h3 {
+  font-family: var(--font-display);
+  font-size: var(--fs-lg);
+  line-height: var(--lh-snug);
+  font-weight: 600;
+  letter-spacing: var(--tracking-snug);
+}
+h4, .h4 {
+  font-size: var(--fs-md);
+  font-weight: 600;
+  letter-spacing: var(--tracking-flat);
+}
+.eyebrow {
+  font-size: var(--fs-2xs);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-eyebrow);
+  font-weight: 600;
+  color: var(--foreground-muted);
+}
+p, .p {
+  font-size: var(--fs-base);
+  line-height: var(--lh-relaxed);
+  color: var(--foreground);
+}
+.lede {
+  font-size: var(--fs-lg);
+  line-height: var(--lh-relaxed);
+  color: var(--foreground-muted);
+}
+small, .small {
+  font-size: var(--fs-sm);
+  color: var(--foreground-muted);
+}
+code, .mono, kbd {
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+  background: var(--surface-sunken);
+  padding: 0.08em 0.36em;
+  border-radius: var(--r-xs);
+  color: var(--foreground);
+}
+.prose, .editor-surface {
+  font-family: var(--font-serif);
+  font-size: 17px;
+  line-height: var(--lh-prose);
+  color: var(--foreground);
+}
+.prose h1 { font-family: var(--font-serif); font-weight: 600; }
+.prose h2 { font-family: var(--font-serif); font-weight: 600; }
+a {
+  color: var(--brand-cyan-600);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  text-decoration-color: rgba(11, 128, 172, 0.4);
+  transition: color var(--dur-2) var(--ease-out);
+}
+a:hover { color: var(--brand-cyan-700); text-decoration-color: currentColor; }
+
+::selection { background: rgba(31, 182, 232, 0.30); color: var(--foreground); }
+
+/* Focus ring — uniform across inputs, buttons, sidebar items. */
+:focus-visible {
+  outline: 2px solid var(--brand-cyan-500);
+  outline-offset: 2px;
+  border-radius: var(--r-sm);
+}

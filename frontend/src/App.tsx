@@ -3,6 +3,7 @@ import { useBackendPort } from "./hooks/useBackendPort";
 import { useProjects } from "./hooks/useProjects";
 import { useAppStore } from "./store";
 import Sidebar, { type AppView } from "./components/Sidebar";
+import TitleBar from "./components/TitleBar";
 import HomeScreen from "./components/HomeScreen";
 import Interview from "./components/Interview";
 import ProjectWorkspace from "./components/ProjectWorkspace";
@@ -63,7 +64,9 @@ export default function App() {
   const activeProject = projects.find((p) => p.id === activeProjectId) ?? null;
 
   return (
-    <div className="h-screen flex flex-row overflow-hidden">
+    <div className="h-screen flex flex-col overflow-hidden">
+      <TitleBar />
+      <div className="flex flex-row flex-1 min-h-0 overflow-hidden">
       <Sidebar
         view={view}
         activeProjectId={activeProjectId}
@@ -106,6 +109,7 @@ export default function App() {
         open={resourcesPanelOpen}
         onClose={() => setResourcesPanelOpen(false)}
       />
+      </div>
     </div>
   );
 }

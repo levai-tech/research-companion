@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { useSettingsStore } from "../settingsStore";
 import { useAppStore } from "../store";
-import { Button } from "@/components/ui/button";
 
 const ROLES: { key: string; label: string }[] = [
   { key: "project_advisor", label: "Project Advisor" },
@@ -25,6 +24,23 @@ const CATALOGUE_DEFAULTS: Record<string, string> = {
 
 const SEARCH_PROVIDERS = ["tavily", "brave"];
 
+const s = {
+  root: { height: "100%", overflowY: "auto", background: "var(--background)" } as React.CSSProperties,
+  inner: { maxWidth: 720, margin: "0 auto", padding: "40px 32px 60px", display: "flex", flexDirection: "column", gap: 36 } as React.CSSProperties,
+  title: { fontFamily: "var(--font-sans)", fontSize: 28, fontWeight: 600, letterSpacing: "-0.012em", margin: 0 } as React.CSSProperties,
+  section: { display: "flex", flexDirection: "column", gap: 14 } as React.CSSProperties,
+  sectionTitle: { fontFamily: "var(--font-sans)", fontSize: 14, fontWeight: 600, color: "var(--foreground)", paddingBottom: 8, borderBottom: "1px solid var(--border)", margin: 0 } as React.CSSProperties,
+  sectionHelp: { fontFamily: "var(--font-sans)", fontSize: 13, color: "var(--foreground-muted)", margin: 0, lineHeight: 1.55 } as React.CSSProperties,
+  field: { display: "flex", flexDirection: "column", gap: 6 } as React.CSSProperties,
+  label: { fontFamily: "var(--font-sans)", fontSize: 13, fontWeight: 600, color: "var(--foreground)" } as React.CSSProperties,
+  inputRow: { display: "flex", gap: 8 } as React.CSSProperties,
+  input: { flex: 1, height: 34, padding: "0 12px", borderRadius: 6, border: "1px solid var(--border-strong)", background: "var(--surface)", fontFamily: "var(--font-sans)", fontSize: 13, color: "var(--foreground)", outline: "none" } as React.CSSProperties,
+  mono: { flex: 1, height: 34, padding: "0 12px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--surface-sunken)", fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--foreground-muted)", display: "flex", alignItems: "center" } as React.CSSProperties,
+  saveBtn: { height: 34, padding: "0 14px", borderRadius: 6, border: "none", background: "var(--brand-navy-800)", color: "var(--paper-0)", fontFamily: "var(--font-sans)", fontSize: 13, fontWeight: 500, cursor: "pointer" } as React.CSSProperties,
+  editBtn: { height: 34, padding: "0 14px", borderRadius: 6, border: "1px solid var(--border-strong)", background: "var(--surface)", color: "var(--foreground)", fontFamily: "var(--font-sans)", fontSize: 13, fontWeight: 500, cursor: "pointer" } as React.CSSProperties,
+  saved: { color: "var(--signal-success)", fontSize: 11, fontWeight: 500, marginLeft: 8 } as React.CSSProperties,
+};
+
 export default function SettingsPage() {
   const { settings, keysMask, loadSettings, loadKeysMask, updateRoleModel, updateSettings, saveApiKey } =
     useSettingsStore();
@@ -38,9 +54,7 @@ export default function SettingsPage() {
   useEffect(() => {
     if (backendPort === null) return;
     setLoadError(null);
-    loadSettings().then((err) => {
-      if (err) setLoadError(err);
-    });
+    loadSettings().then((err) => { if (err) setLoadError(err); });
     loadKeysMask();
   }, [backendPort, loadSettings, loadKeysMask]);
 
@@ -54,201 +68,158 @@ export default function SettingsPage() {
 
   if (!settings) {
     return (
-      <div className="p-8 space-y-3 text-sm">
-        <p className="text-muted-foreground">
-          {backendPort === null
-            ? "Waiting for backend port…"
-            : `Connecting to backend on port ${backendPort}…`}
-        </p>
-        {loadError && (
-          <p className="text-destructive font-mono text-xs break-all">{loadError}</p>
-        )}
-        {backendPort !== null && (
-          <button
-            className="underline text-muted-foreground hover:text-foreground"
-            onClick={() => {
-              setLoadError(null);
-              loadSettings().then((err) => { if (err) setLoadError(err); });
-              loadKeysMask();
-            }}
-          >
-            Retry
-          </button>
-        )}
+      <div style={s.root}>
+        <div style={s.inner}>
+          <h1 style={s.title}>Settings</h1>
+          <p style={s.sectionHelp}>
+            {backendPort === null ? "Waiting for backend port…" : `Connecting to backend on port ${backendPort}…`}
+          </p>
+          {loadError && (
+            <p style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--signal-danger)", wordBreak: "break-all" }}>{loadError}</p>
+          )}
+          {backendPort !== null && (
+            <button style={{ ...s.editBtn, alignSelf: "flex-start" }} onClick={() => { setLoadError(null); loadSettings().then((err) => { if (err) setLoadError(err); }); loadKeysMask(); }}>
+              Retry
+            </button>
+          )}
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="max-w-2xl mx-auto p-8 space-y-10">
-      <h1 className="text-2xl font-semibold">Settings</h1>
+    <div style={s.root}>
+      <div style={s.inner}>
+        <h1 style={s.title}>Settings</h1>
 
-      {/* Display Name */}
-      <section className="space-y-4">
-        <h2 className="text-base font-medium border-b pb-2">Display Name</h2>
-        <EditableField
-          label="Display Name"
-          value={settings.display_name ?? ""}
-          onSave={(v) => updateSettings({ display_name: v })}
-        />
-      </section>
+        {/* Display Name */}
+        <section style={s.section}>
+          <h2 style={s.sectionTitle}>Display Name</h2>
+          <EditableField label="Display Name" value={settings.display_name ?? ""} onSave={(v) => updateSettings({ display_name: v })} />
+        </section>
 
-      {/* API Keys */}
-      <section className="space-y-4">
-        <h2 className="text-base font-medium border-b pb-2">API Keys</h2>
+        {/* API Keys */}
+        <section style={s.section}>
+          <h2 style={s.sectionTitle}>API Keys</h2>
+          <KeyField
+            label="OpenRouter API Key" name="openrouter_api_key"
+            isSet={keysMask.openrouter_api_key ?? false}
+            value={openrouterKey} onChange={setOpenrouterKey}
+            saving={saving === "openrouter_api_key"}
+            onSave={() => handleSaveKey("openrouter_api_key", openrouterKey, () => setOpenrouterKey(""))}
+          />
+          <KeyField
+            label="Tavily API Key" name="tavily_api_key"
+            isSet={keysMask.tavily_api_key ?? false}
+            value={tavilyKey} onChange={setTavilyKey}
+            saving={saving === "tavily_api_key"}
+            onSave={() => handleSaveKey("tavily_api_key", tavilyKey, () => setTavilyKey(""))}
+          />
+        </section>
 
-        <KeyField
-          label="OpenRouter API Key"
-          name="openrouter_api_key"
-          isSet={keysMask.openrouter_api_key ?? false}
-          value={openrouterKey}
-          onChange={setOpenrouterKey}
-          saving={saving === "openrouter_api_key"}
-          onSave={() => handleSaveKey("openrouter_api_key", openrouterKey, () => setOpenrouterKey(""))}
-        />
-
-        <KeyField
-          label="Tavily API Key"
-          name="tavily_api_key"
-          isSet={keysMask.tavily_api_key ?? false}
-          value={tavilyKey}
-          onChange={setTavilyKey}
-          saving={saving === "tavily_api_key"}
-          onSave={() => handleSaveKey("tavily_api_key", tavilyKey, () => setTavilyKey(""))}
-        />
-      </section>
-
-      {/* Model Router */}
-      <section className="space-y-4">
-        <h2 className="text-base font-medium border-b pb-2">Model Router</h2>
-        <p className="text-sm text-muted-foreground">
-          Paste any OpenRouter model ID. Find available models at{" "}
-          <span className="font-mono text-xs">openrouter.ai/models</span>.
-          Clearing a field reverts to the Catalogue default.
-        </p>
-
-        <div className="space-y-3">
-          {ROLES.map(({ key, label }) => {
-            const model = settings.roles[key]?.model ?? "";
-            return (
-              <EditableField
-                key={key}
-                label={label}
-                value={model}
-                placeholder={CATALOGUE_DEFAULTS[key]}
-                onSave={(v) => updateRoleModel(key, v)}
-              />
-            );
-          })}
-        </div>
-      </section>
-
-      {/* Search Provider */}
-      <section className="space-y-4">
-        <h2 className="text-base font-medium border-b pb-2">Search Provider</h2>
-        <div className="flex gap-2">
-          {SEARCH_PROVIDERS.map((p) => (
-            <Button
-              key={p}
-              size="sm"
-              variant={settings.search_provider === p ? "default" : "outline"}
-              onClick={() => updateSettings({ search_provider: p })}
-            >
-              {p.charAt(0).toUpperCase() + p.slice(1)}
-            </Button>
+        {/* Model Router */}
+        <section style={s.section}>
+          <h2 style={s.sectionTitle}>Model Router</h2>
+          <p style={s.sectionHelp}>
+            Paste any OpenRouter model ID (e.g.{" "}
+            <code style={{ background: "var(--surface-sunken)", padding: "1px 6px", borderRadius: 4, fontFamily: "var(--font-mono)", fontSize: 12 }}>
+              anthropic/claude-sonnet-4.6
+            </code>
+            ). Clearing a field reverts to the Catalogue default.
+          </p>
+          {ROLES.map(({ key, label }) => (
+            <EditableField
+              key={key} label={label}
+              value={settings.roles[key]?.model ?? ""}
+              placeholder={CATALOGUE_DEFAULTS[key]}
+              onSave={(v) => updateRoleModel(key, v)}
+            />
           ))}
-        </div>
-      </section>
+        </section>
 
-      {/* Ollama */}
-      <section className="space-y-4">
-        <h2 className="text-base font-medium border-b pb-2">Ollama (Local Embeddings)</h2>
-        <p className="text-sm text-muted-foreground">
-          Embeddings are generated locally — no API key required.
-        </p>
+        {/* Search Provider */}
+        <section style={s.section}>
+          <h2 style={s.sectionTitle}>Search Provider</h2>
+          <div style={{ display: "flex", gap: 6 }}>
+            {SEARCH_PROVIDERS.map((p) => (
+              <button
+                key={p}
+                style={{
+                  height: 30, padding: "0 14px", borderRadius: 6,
+                  border: settings.search_provider === p ? "1px solid var(--brand-navy-800)" : "1px solid var(--border-strong)",
+                  background: settings.search_provider === p ? "var(--brand-navy-800)" : "var(--surface)",
+                  color: settings.search_provider === p ? "var(--paper-0)" : "var(--foreground)",
+                  fontFamily: "var(--font-sans)", fontSize: 12, fontWeight: 500, cursor: "pointer",
+                }}
+                onClick={() => updateSettings({ search_provider: p })}
+              >
+                {p.charAt(0).toUpperCase() + p.slice(1)}
+              </button>
+            ))}
+          </div>
+        </section>
 
-        <EditableField
-          label="Endpoint"
-          value={settings.ollama.endpoint}
-          onSave={(v) => updateSettings({ ollama: { ...settings.ollama, endpoint: v } })}
-        />
-
-        <EditableField
-          label="Embedding Model"
-          value={settings.ollama.embedding_model}
-          onSave={(v) => updateSettings({ ollama: { ...settings.ollama, embedding_model: v } })}
-        />
-      </section>
-    </div>
-  );
-}
-
-function KeyField({
-  label, name, isSet, value, onChange, saving, onSave,
-}: {
-  label: string; name: string; isSet: boolean;
-  value: string; onChange: (v: string) => void;
-  saving: boolean; onSave: () => void;
-}) {
-  return (
-    <div className="space-y-1">
-      <label htmlFor={name} className="text-sm font-medium">
-        {label}
-        {isSet && <span className="ml-2 text-xs text-green-600 font-normal">✓ saved</span>}
-      </label>
-      <div className="flex gap-2">
-        <input
-          id={name}
-          type="password"
-          placeholder={isSet ? "••••••••••••" : "Enter key…"}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          className="flex-1 rounded-md border px-3 py-1.5 text-sm"
-          autoComplete="off"
-        />
-        <Button size="sm" disabled={!value || saving} onClick={onSave}>
-          {saving ? "Saving…" : "Save"}
-        </Button>
+        {/* Ollama */}
+        <section style={s.section}>
+          <h2 style={s.sectionTitle}>Ollama (Local Embeddings)</h2>
+          <p style={s.sectionHelp}>Embeddings are generated locally — no API key required.</p>
+          <EditableField label="Endpoint" value={settings.ollama.endpoint} onSave={(v) => updateSettings({ ollama: { ...settings.ollama, endpoint: v } })} />
+          <EditableField label="Embedding Model" value={settings.ollama.embedding_model} onSave={(v) => updateSettings({ ollama: { ...settings.ollama, embedding_model: v } })} />
+        </section>
       </div>
     </div>
   );
 }
 
-function EditableField({
-  label, value, placeholder, onSave,
-}: {
+function KeyField({ label, name, isSet, value, onChange, saving, onSave }: {
+  label: string; name: string; isSet: boolean;
+  value: string; onChange: (v: string) => void;
+  saving: boolean; onSave: () => void;
+}) {
+  return (
+    <div style={s.field}>
+      <label htmlFor={name} style={s.label}>
+        {label}
+        {isSet && <span style={s.saved}>✓ saved</span>}
+      </label>
+      <div style={s.inputRow}>
+        <input
+          id={name} type="password"
+          placeholder={isSet ? "••••••••••••" : "Enter key…"}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          style={s.input}
+          autoComplete="off"
+        />
+        <button style={{ ...s.saveBtn, opacity: !value || saving ? 0.5 : 1, cursor: !value || saving ? "default" : "pointer" }} disabled={!value || saving} onClick={onSave}>
+          {saving ? "Saving…" : "Save"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function EditableField({ label, value, placeholder, onSave }: {
   label: string; value: string; placeholder?: string; onSave: (v: string) => Promise<void>;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
-
   const displayValue = value || placeholder || "";
 
   return (
-    <div className="space-y-1">
-      <label className="text-sm font-medium">{label}</label>
-      <div className="flex gap-2 items-center">
+    <div style={s.field}>
+      <label style={s.label}>{label}</label>
+      <div style={s.inputRow}>
         {editing ? (
           <>
-            <input
-              type="text"
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              className="flex-1 rounded-md border px-3 py-1.5 text-sm"
-            />
-            <Button size="sm" onClick={async () => { await onSave(draft); setEditing(false); }}>
-              Save
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => setEditing(false)}>Cancel</Button>
+            <input type="text" value={draft} onChange={(e) => setDraft(e.target.value)} style={s.input} autoFocus />
+            <button style={s.saveBtn} onClick={async () => { await onSave(draft); setEditing(false); }}>Save</button>
+            <button style={s.editBtn} onClick={() => setEditing(false)}>Cancel</button>
           </>
         ) : (
           <>
-            <span className="flex-1 rounded-md border px-3 py-1.5 text-sm bg-muted/50 text-muted-foreground font-mono">
-              {displayValue}
-            </span>
-            <Button size="sm" variant="outline" onClick={() => { setDraft(value); setEditing(true); }}>
-              Edit
-            </Button>
+            <div style={s.mono}>{displayValue}</div>
+            <button style={s.editBtn} onClick={() => { setDraft(value); setEditing(true); }}>Edit</button>
           </>
         )}
       </div>

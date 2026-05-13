@@ -61,6 +61,8 @@ export default function ResourcesPanel({ open, onClose }: Props) {
   const [resources, setResources] = useState<Resource[]>([]);
   const [query, setQuery] = useState("");
   const [chunkHits, setChunkHits] = useState<ChunkHit[]>([]);
+  const [expandedChunk, setExpandedChunk] = useState<number | null>(null);
+  const [hoveredChunk, setHoveredChunk] = useState<number | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Fetch all resources when opened
@@ -76,6 +78,7 @@ export default function ResourcesPanel({ open, onClose }: Props) {
     if (!open) return;
     setQuery("");
     setChunkHits([]);
+    setExpandedChunk(null);
     const id = setTimeout(() => inputRef.current?.focus(), 80);
     return () => clearTimeout(id);
   }, [open]);
@@ -96,6 +99,7 @@ export default function ResourcesPanel({ open, onClose }: Props) {
   function handleSearch(e: FormEvent) {
     e.preventDefault();
     if (!port || !query.trim()) return;
+    setExpandedChunk(null);
     const params = new URLSearchParams({ q: query.trim(), top_k: "10" });
     fetch(`http://127.0.0.1:${port}/resources/search?${params}`)
       .then((r) => r.json())
@@ -207,21 +211,65 @@ export default function ResourcesPanel({ open, onClose }: Props) {
                 <span>Matching passages · {chunkHits.length}</span>
                 <span style={{ fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>semantic + keyword</span>
               </div>
-              {chunkHits.map((hit, i) => (
-                <div key={i} style={{ display: "flex", gap: 10, padding: "10px 12px", borderRadius: 8 }}>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ fontSize: 13, fontWeight: 600, margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {hit.citation_metadata?.title ?? "(untitled)"}
-                    </p>
-                    {hit.location && (
-                      <p style={{ fontSize: 11, color: "var(--foreground-muted, #888)", margin: "2px 0 0" }}>{hit.location}</p>
-                    )}
-                    <p style={{ fontSize: 12, lineHeight: 1.5, margin: "4px 0 0", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" as const, overflow: "hidden" }}>
-                      {highlight(hit.chunk_text, query)}
-                    </p>
+              {chunkHits.map((hit, i) => {
+                const isExpanded = expandedChunk === i;
+                const isHovered = hoveredChunk === i;
+                return (
+                  <div
+                    key={i}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setExpandedChunk(isExpanded ? null : i)}
+                    onKeyDown={(e) => e.key === "Enter" && setExpandedChunk(isExpanded ? null : i)}
+                    onMouseEnter={() => setHoveredChunk(i)}
+                    onMouseLeave={() => setHoveredChunk(null)}
+                    style={{
+                      display: "flex",
+                      gap: 10,
+                      padding: "10px 12px",
+                      borderRadius: 8,
+                      cursor: "pointer",
+                      background: isHovered ? "var(--sidebar-hover, #ece9e1)" : "transparent",
+                      transition: "background 0.1s ease",
+                    }}
+                  >
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ fontSize: 13, fontWeight: 600, margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {hit.citation_metadata?.title ?? "(untitled)"}
+                      </p>
+                      {hit.location && (
+                        <p style={{ fontSize: 11, color: "var(--foreground-muted, #888)", margin: "2px 0 0" }}>{hit.location}</p>
+                      )}
+                      <p style={{
+                        fontSize: 12,
+                        lineHeight: 1.5,
+                        margin: "4px 0 0",
+                        ...(isExpanded
+                          ? {}
+                          : { display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" as const, overflow: "hidden" }),
+                      }}>
+                        {highlight(hit.chunk_text, query)}
+                      </p>
+                    </div>
+                    <svg
+                      width="12"
+                      height="12"
+                      viewBox="0 0 12 12"
+                      fill="none"
+                      aria-hidden
+                      style={{
+                        flexShrink: 0,
+                        marginTop: 3,
+                        color: "var(--foreground-muted, #888)",
+                        transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)",
+                        transition: "transform 0.15s ease",
+                      }}
+                    >
+                      <path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </Fragment>
           )}
 
